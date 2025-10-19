@@ -50,43 +50,40 @@ Resources:
                       Type: AWS::ECS::Service
                       Properties:
                                 AvailabilityZoneRebalancing: String
+                                #Preguntar
                                 CapacityProviderStrategy: 
+                                 #Preguntar
                                 Cluster: String
-                                DeploymentConfiguration: str
                                 DeploymntController: 
                                 DesiredCount: Integer
-                                EnableECSManagedTags: Boolean
+                                #Preguntar
                                 EnableExecuteCommand: Boolean
-                                ForceNewDeployment: 
-                                HealthCheckGracePeriodSeconds: Integer
+                               #Preguntar
                                 LaunchType: String
                                 LoadBalancers: 
                                 NetworkConfiguration: 
-                                PlacementConstraints: 
-                                PlacementStrategies: 
+                                #Preguntar
                                 PlatformVersion: String
-                                PropagateTags: String
+                               
                                 Role: String
+                                #Preguntar
                                 SchedulingStrategy: String
-                                ServiceConnectConfiguration: 
+                                 
                                 ServiceName: String
-                                ServiceRegistries: 
+                                #Para organizar al definir metadatos
                                 Tags: 
-                                TaskDefinition: String
-                                VolumeConfigurations: 
-                                VpcLatticeConfigurations: 
+                                
+                               
+                              
           LoadBalancers:
                         Type: AWS::ElasticLoadBalancing::LoadBalancer
                         Properties:
-                                  AccessLoggingPolicy: 
-                                  AppCookieStickinessPolicy: 
+                                 
                                   AvailabilityZones: 
-                                  ConnectionDrainingPolicy: 
-                                  ConnectionSettings: 
+                                  #Preguntar
                                   CrossZone: Boolean
-                                  HealthCheck: 
                                   Instances: 
-                                  LBCookieStickinessPolicy: 
+                                  #Preguntar
                                   Listeners: 
                                   LoadBalancerName: String
                                   Policies: 

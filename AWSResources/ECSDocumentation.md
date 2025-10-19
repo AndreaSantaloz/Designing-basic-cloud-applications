@@ -84,6 +84,7 @@ Nota importante: Las tareas que utilizan el tipo de lanzamiento Fargate o los ti
 ServiceConnectConfiguration: La configuración para que este servicio detecte y se conecte a servicios, y sea detectado por otros servicios dentro de un espacio de nombres y conectado desde ellos.
 
 Las tareas que se ejecutan en un espacio de nombres pueden usar nombres cortos para conectarse a los servicios del espacio de nombres. Las tareas pueden conectarse a servicios en todos los clústeres del espacio de nombres. Las tareas se conectan a través de un contenedor proxy administrado que recopila registros y métricas para una mayor visibilidad. Solo las tareas creadas por los servicios de Amazon ECS son compatibles con Service Connect. Para obtener más información, consulte Service Connect en la Guía para desarrolladores de Amazon Elastic Container Service.
+
 ServiceName: El nombre de su servicio. Se permiten hasta 255 letras (mayúsculas y minúsculas), números, guiones bajos y guiones. Los nombres de los servicios deben ser únicos dentro de un clúster, pero puede tener servicios con nombres similares en varios clústeres dentro de una región o en varias regiones.
 
 Nota importante: 
@@ -119,6 +120,7 @@ TaskDefinition: La familia y la revisión (familia:revisión) o el ARN completo 
 Se debe especificar una definición de tarea si el servicio utiliza los controladores de implementación ECS o CODE_DEPLOY.
 
 Para obtener más información sobre los tipos de implementación, consulte Tipos de implementación de Amazon ECS.
+
 VolumeConfigurations: La configuración de un volumen especificado en la definición de la tarea como un volumen configurado al iniciarse. Actualmente, el único tipo de volumen compatible es Amazon EBS.
 
 Nota importante:Para eliminar esta propiedad de su recurso de servicio, especifique una matriz ServiceVolumeConfiguration vacía.

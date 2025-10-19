@@ -36,6 +36,7 @@ Si actualiza las propiedades de un escucha, AWS CloudFormation lo elimina y crea
 LoadBalancerName: El nombre del balanceador de carga. Este nombre debe ser único dentro del conjunto de balanceadores de carga de la región.
 
 Si no especifica un nombre, AWS CloudFormation genera un ID físico único para el balanceador de carga. Para obtener más información, consulte Tipo de nombre. Si especifica un nombre, no podrá realizar actualizaciones que requieran la sustitución de este recurso, pero sí podrá realizar otras actualizaciones. Para sustituir el recurso, especifique un nuevo nombre.
+
 Policies: Las políticas definidas para su balanceador de carga clásico. Especifique solo las políticas del servidor backend. 
     
 Scheme: El tipo de balanceador de carga. Válido solo para balanceadores de carga en una VPC.
