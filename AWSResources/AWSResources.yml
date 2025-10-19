@@ -75,6 +75,27 @@ Resources:
                                 TaskDefinition: String
                                 VolumeConfigurations: 
                                 VpcLatticeConfigurations: 
+          LoadBalancers:
+                        Type: AWS::ElasticLoadBalancing::LoadBalancer
+                        Properties:
+                                  AccessLoggingPolicy: 
+                                  AppCookieStickinessPolicy: 
+                                  AvailabilityZones: 
+                                  ConnectionDrainingPolicy: 
+                                  ConnectionSettings: 
+                                  CrossZone: Boolean
+                                  HealthCheck: 
+                                  Instances: 
+                                  LBCookieStickinessPolicy: 
+                                  Listeners: 
+                                  LoadBalancerName: String
+                                  Policies: 
+                                  Scheme: String
+                                  SecurityGroups: 
+                                  Subnets: 
+                                  Tags: 
+    
+
 
   
         
