@@ -38,5 +38,43 @@ Resources:
                                   Tags:
                                   #Duda
                                   UserData: String
+          Repository:
+                      Type: AWS::ECR::Repository
+                      Properties:
+                                EmptyOnDelete: True
+                                RepositoryName: AlojamientoImagen
+                                Tags: 
+
+          ECS:    
           
+                      Type: AWS::ECS::Service
+                      Properties:
+                                AvailabilityZoneRebalancing: String
+                                CapacityProviderStrategy: 
+                                Cluster: String
+                                DeploymentConfiguration: str
+                                DeploymntController: 
+                                DesiredCount: Integer
+                                EnableECSManagedTags: Boolean
+                                EnableExecuteCommand: Boolean
+                                ForceNewDeployment: 
+                                HealthCheckGracePeriodSeconds: Integer
+                                LaunchType: String
+                                LoadBalancers: 
+                                NetworkConfiguration: 
+                                PlacementConstraints: 
+                                PlacementStrategies: 
+                                PlatformVersion: String
+                                PropagateTags: String
+                                Role: String
+                                SchedulingStrategy: String
+                                ServiceConnectConfiguration: 
+                                ServiceName: String
+                                ServiceRegistries: 
+                                Tags: 
+                                TaskDefinition: String
+                                VolumeConfigurations: 
+                                VpcLatticeConfigurations: 
+
+  
         
