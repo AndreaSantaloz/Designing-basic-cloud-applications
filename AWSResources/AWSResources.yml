@@ -5,40 +5,38 @@ Metadata:
   Purpose: "It is designing simple app in AWS"
 
 # Recursos para la implementación
-  Type: AWS::EC2::Instance
-  Properties:
-        # Necesaria para establecer todas las zonas
-        AvailabilityZone: String
-        #Condiciones de Cpu son necesarias para el tipo de instancia
-        CpuOptions: 
-              CpuOptions
-        #Duda de poner estos dos
-        HostId: String
-        ImageId: String
-        # Establece el tipo de instancia que necesito
-        InstanceType: String
-        #Para conectarse a la instancia
-        KeyName: String
-        #Para usar una  plantilla
-        LaunchTemplate: 
-          LaunchTemplateSpecification
-        #Para definir las interfaces de red
-        NetworkInterfaces: 
-          - NetworkInterface
-        #En duda
-        PrivateIpAddress: String
-        #En duda
-        RamdiskId: String
-        #Si utilizaramos otra VPC tendriamos que usar este
-        SecurityGroupIds: 
-              - String
-        #Para configurar los grupos de seguridad
-        SecurityGroups: 
-          - String
-        #Duda
-        SubnetId: String
-        #Para establecer las etiquetas
-        Tags: 
-            - Tag
-        UserData: String
+Resources:
+          AppHosted:
+                       Type: AWS::EC2::Instance
+                       Properties:
+                                  # Necesaria para establecer todas las zonas
+                                  AvailabilityZone: 
+                                  #Condiciones de Cpu son necesarias para el tipo de instancia
+                                  CpuOptions:         
+                                  #Duda de poner estos dos
+                                  HostId: 
+                                  ImageId: 
+                                  # Establece el tipo de instancia que necesito
+                                  InstanceType: 
+                                  #Para conectarse a la instancia
+                                  KeyName: 
+                                  #Para usar una  plantilla
+                                  LaunchTemplate: 
+                                  #Para definir las interfaces de red
+                                  NetworkInterfaces: 
+                                  #En duda
+                                  PrivateIpAddress: 
+                                  #En duda
+                                  RamdiskId: 
+                                  #Si utilizaramos otra VPC tendriamos que usar este
+                                  SecurityGroupIds: 
+                                  #Para configurar los grupos de seguridad
+                                  SecurityGroups: 
+                                  #Duda
+                                  SubnetId: 
+                                  #Para establecer las etiquetas
+                                  Tags:
+                                  #Duda
+                                  UserData: String
+          
         
