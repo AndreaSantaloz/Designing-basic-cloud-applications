@@ -13,8 +13,7 @@ Resources:
                                   AvailabilityZone: 
                                   #Condiciones de Cpu son necesarias para el tipo de instancia
                                   CpuOptions:         
-                                  #Duda de poner estos dos
-                                  HostId: 
+                                  #Si usamos plantilla especificar imageid
                                   ImageId: 
                                   # Establece el tipo de instancia que necesito
                                   InstanceType: 
@@ -24,7 +23,7 @@ Resources:
                                   LaunchTemplate: 
                                   #Para definir las interfaces de red
                                   NetworkInterfaces: 
-                                  #En duda
+                                  #Establecer la ip del recurso
                                   PrivateIpAddress: 
                                   #En duda
                                   RamdiskId: 
@@ -36,7 +35,7 @@ Resources:
                                   SubnetId: 
                                   #Para establecer las etiquetas
                                   Tags:
-                                  #Duda
+                                  #Script 
                                   UserData: String
           Repository:
                       Type: AWS::ECR::Repository
@@ -64,11 +63,9 @@ Resources:
                                 NetworkConfiguration: 
                                 #Preguntar
                                 PlatformVersion: String
-                               
                                 Role: String
                                 #Preguntar
                                 SchedulingStrategy: String
-                                 
                                 ServiceName: String
                                 #Para organizar al definir metadatos
                                 Tags: 
