@@ -4,6 +4,21 @@ Metadata:
   version: "1.0.0"
   Purpose: "It is designing simple app in AWS"
 
+# ============================================================================
+# NETWORKING RESOURCES
+# ============================================================================
+Resources:
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ECS tasks
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+          
 # Recursos para la implementación
 Resources:
           AppHosted:
@@ -42,42 +57,56 @@ Resources:
                       Properties:
                                 EmptyOnDelete: True
                                 RepositoryName: AlojamientoImagen
-                                Tags: 
+                                ImageScanningConfiguration:
+                                ScanOnPush: false
+                                LifecyclePolicy:
+                                    LifecyclePolicyText: |
+                                                        {
+                                                          "rules": [
+                                                           {
+                                                              "rulePriority": 1,
+                                                             "description": "Mantain only last 2 images",
+                                                              "selection": {
+                                                                "tagStatus": "any",
+                                                                "countType": "imageCountMoreThan",
+                                                                "countNumber": 2
+                                                              },
+                                                              "action": {
+                                                               "type": "expire"
+                                                              }
+                                                            }
+                                                          ]
+                                                        } 
 
           ECS:    
           
                       Type: AWS::ECS::Service
+                      DependsOn:
+                              - Listener
                       Properties:
-                                AvailabilityZoneRebalancing: String
-                                #Preguntar
-                                CapacityProviderStrategy: 
-                                 #Preguntar
-                                Cluster: String
-                                DeploymntController: 
-                                DesiredCount: Integer
-                                #Preguntar
-                                EnableExecuteCommand: Boolean
-                               #Preguntar
-                                LaunchType: String
-                                LoadBalancers: 
-                                NetworkConfiguration: 
-                                #Preguntar
-                                PlatformVersion: String
-                                Role: String
-                                #Preguntar
-                                SchedulingStrategy: String
-                                ServiceName: String
-                                #Para organizar al definir metadatos
-                                Tags: 
+                               Cluster: !Ref ECSCluster
+                               ServiceName: employee-service
+                               TaskDefinition: !Ref TaskDefinition
+                               DesiredCount: 1
+                               LaunchType: FARGATE
+                               NetworkConfiguration:
+                                 AwsvpcConfiguration:
+                                   AssignPublicIp: ENABLED
+                                   Subnets: !Ref SubnetIds
+                                   SecurityGroups:
+                                     - !Ref ECSSecurityGroup
+                               LoadBalancers:
+                                 - ContainerName: tickets-container
+                                   ContainerPort: 8080
+                                   TargetGroupArn: !Ref TargetGroup
+                              
                                 
                                
                               
           LoadBalancers:
                         Type: AWS::ElasticLoadBalancing::LoadBalancer
                         Properties:                                 
-                                  AvailabilityZones: 
-                                  #Preguntar
-                                  CrossZone: Boolean
+                                  
                                   Instances: 
                                   #Preguntar
                                   Listeners: 
@@ -87,8 +116,244 @@ Resources:
                                   SecurityGroups: 
                                   Subnets: 
                                   Tags: 
-    
+Outputs:
+  RepositoryUri:
+    Description: ECR URI
+    Value: !GetAtt ECRRepository.RepositoryUri
+
+  RepositoryName:
+    Description: Repository Name
+    Value: !Ref RepositoryName
+
+  RepositoryArn:
+    Description: Repository ARN
+    Value: !GetAtt ECRRepository.Arn    
 
 
   
         
+
+  # ============================================================================
+  # API GATEWAY RESOURCES
+  # ============================================================================
+  VPCLink:
+    Type: AWS::ApiGateway::VpcLink
+    Properties:
+      Name: tickets-vpc-link
+      TargetArns:
+        - !Ref NLB
+
+  RestAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: tickets-api
+      Description: API para gestión de tickets
+
+  ItemsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestAPI
+      ParentId: !GetAtt RestAPI.RootResourceId
+      PathPart: items
+
+  ItemResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestAPI
+      ParentId: !Ref ItemsResource
+      PathPart: "{id}"
+
+  PostItemsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPI
+      ResourceId: !Ref ItemsResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "http://${NLB.DNSName}:8080/items"
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref VPCLink
+
+  GetItemsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPI
+      ResourceId: !Ref ItemsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: GET
+        Uri: !Sub "http://${NLB.DNSName}:8080/items"
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref VPCLink
+
+  GetItemMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPI
+      ResourceId: !Ref ItemResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      RequestParameters:
+        method.request.path.id: true
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: GET
+        Uri: !Sub "http://${NLB.DNSName}:8080/items/{id}"
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref VPCLink
+        RequestParameters:
+          integration.request.path.id: method.request.path.id
+
+  PutItemMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPI
+      ResourceId: !Ref ItemResource
+      HttpMethod: PUT
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      RequestParameters:
+        method.request.path.id: true
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: PUT
+        Uri: !Sub "http://${NLB.DNSName}:8080/items/{id}"
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref VPCLink
+        RequestParameters:
+          integration.request.path.id: method.request.path.id
+
+  DeleteItemMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPI
+      ResourceId: !Ref ItemResource
+      HttpMethod: DELETE
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      RequestParameters:
+        method.request.path.id: true
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: DELETE
+        Uri: !Sub "http://${NLB.DNSName}:8080/items/{id}"
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref VPCLink
+        RequestParameters:
+          integration.request.path.id: method.request.path.id
+
+  OptionsItemsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPI
+      ResourceId: !Ref ItemsResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,x-api-key'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ""
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  OptionsItemMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPI
+      ResourceId: !Ref ItemResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,x-api-key'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ""
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  APIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - PostItemsMethod
+      - GetItemsMethod
+      - GetItemMethod
+      - PutItemMethod
+      - DeleteItemMethod
+      - OptionsItemsMethod
+      - OptionsItemMethod
+    Properties:
+      RestApiId: !Ref RestAPI
+
+  APIStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref RestAPI
+      DeploymentId: !Ref APIDeployment
+      StageName: prod
+
+  APIKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: tickets-api-key
+      Enabled: true
+
+  UsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: APIStage
+    Properties:
+      UsagePlanName: tickets-usage-plan
+      ApiStages:
+        - ApiId: !Ref RestAPI
+          Stage: !Ref APIStage
+
+  UsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref APIKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref UsagePlan
+
+# ============================================================================
+# OUTPUTS
+# ============================================================================
+Outputs:
+  APIEndpoint:
+    Description: API Gateway URL
+    Value: !Sub "https://${RestAPI}.execute-api.eu-east-1.amazonaws.com/prod"
+
+  APIKeyId:
+    Description: API Key ID
+    Value: !Ref APIKey
