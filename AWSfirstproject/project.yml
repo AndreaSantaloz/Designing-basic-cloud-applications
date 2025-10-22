@@ -1,0 +1,32 @@
+---
+AWSTemplateFormatVersion: version date
+
+Description: Designing a employee app
+
+Metadata:
+          Author: "Andrea Santana López"
+          Title: "Cloud Computing First practice"
+          version: "1.0.0"
+          Purpose: "It is designing simple app in AWS"
+
+
+Parameters:
+  set of parameters
+
+Rules:
+  set of rules
+
+Mappings:
+  set of mappings
+
+Conditions:
+  set of conditions
+
+Transform:
+  set of transforms
+
+Resources:
+  set of resources
+
+Outputs:
+  set of outputs
