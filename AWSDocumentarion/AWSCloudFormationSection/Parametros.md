@@ -1,4 +1,4 @@
-```
+
 La segunda es Parameters
 Utilice la sección opcional "Parámetros" para personalizar sus plantillas. Con los parámetros, puede introducir valores personalizados en su plantilla cada vez que cree o actualice una pila. Al usar parámetros en sus plantillas, puede crear plantillas reutilizables y flexibles que se adapten a escenarios específicos.
 
