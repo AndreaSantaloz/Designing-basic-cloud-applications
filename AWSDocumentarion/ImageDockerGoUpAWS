@@ -1,0 +1,80 @@
+Subir tu aplicación a AWS (Amazon Web Services) con Docker es el paso natural después de crear la imagen. El proceso más común y recomendado es utilizar Amazon ECS (Elastic Container Service) o AWS Fargate (que utiliza ECS sin gestionar los servidores subyacentes).
+
+Aquí tienes un resumen de los pasos a seguir para llevar tu imagen final_app a AWS:
+
+1. Almacenar la Imagen en ECR
+
+Primero, necesitas un lugar centralizado y seguro en AWS para guardar tu imagen de Docker, ya que tu PC local no es accesible para los servicios de AWS. Este servicio es ECR (Elastic Container Registry).
+
+Pasos
+
+    Crear un Repositorio ECR:
+
+        Ve a la consola de AWS, busca ECR y haz clic en "Crear repositorio". Dale un nombre (ej., mi-app-final).
+
+    Autenticar Docker:
+
+        AWS te proporcionará un comando (similar a aws ecr get-login-password | docker login ...) para autenticar tu cliente Docker local con ECR. Debes tener la CLI de AWS instalada y configurada.
+
+    Etiquetar la Imagen Local:
+
+        Etiqueta tu imagen local con la URL del repositorio ECR (que AWS te proporciona):
+        Bash
+
+    docker tag final_app:latest <ID_de_tu_cuenta>.dkr.ecr.<region>.amazonaws.com/mi-app-final:latest
+
+Subir la Imagen (Push):
+
+    Sube la imagen etiquetada a ECR:
+    Bash
+
+        docker push <ID_de_tu_cuenta>.dkr.ecr.<region>.amazonaws.com/mi-app-final:latest
+
+2. Desplegar con ECS/Fargate
+
+Una vez que la imagen está en ECR, utilizas Amazon ECS para desplegarla como un contenedor en un clúster. La forma más moderna es usar AWS Fargate, que elimina la necesidad de gestionar servidores EC2.
+
+Pasos
+
+A. Crear una Definición de Tarea (Task Definition)
+
+Una Definición de Tarea es un plano que le dice a ECS cómo ejecutar tu contenedor.
+
+    Especifica la imagen (usando la URL de ECR).
+
+    Define la cantidad de CPU y memoria requerida.
+
+    Define el comando de inicio (similar a tu CMD en el Dockerfile).
+
+    Especifica el modo de red (generalmente awsvpc).
+
+B. Crear un Clúster ECS
+
+    Crea un nuevo Clúster ECS (puedes elegir el tipo "Networking only" si usarás Fargate).
+
+C. Crear un Servicio o Tarea
+
+    Para una aplicación de larga duración (servidor web): Creas un Servicio ECS. Este mantiene el número de tareas (contenedores) que especifiques en ejecución constante y puede integrarse con un Load Balancer.
+
+    Para un trabajo puntual (script de Python que corre una vez y termina): Simplemente ejecutas una Tarea (Run Task). Dado que tu aplicación anterior era un script de Python que terminaba (Employee.py), esta sería la opción más adecuada.
+
+Ejecutar Tarea Puntual (Para Employee.py)
+
+    En la consola ECS, selecciona tu clúster.
+
+    Haz clic en "Run new Task" (Ejecutar nueva Tarea).
+
+    Selecciona tu Definición de Tarea y la plataforma FARGATE.
+
+    Configura la red (VPC y subredes).
+
+    La tarea se iniciará, ejecutará tu script employee.py, y se detendrá una vez que el script finalice. Los logs estarán disponibles en Amazon CloudWatch.
+
+3. Opciones Alternativas
+
+Servicio AWS	Caso de Uso Ideal	Descripción
+AWS App Runner	Web apps simples	Servicio totalmente gestionado. Solo apuntas a tu ECR o repositorio de código y AWS se encarga del despliegue, escalado y la red. Más fácil de usar que ECS.
+
+AWS Lambda (con contenedores)	Funciones cortas, sin estado	Si tu script ejecuta una tarea muy rápida (menos de 15 minutos), puedes empaquetarlo como una función Lambda usando imágenes de contenedor. Muy eficiente en costes.
+
+Amazon EC2 (Manual)	Control total sobre el servidor	Lanzas una máquina virtual (EC2), te conectas por SSH, instalas Docker, y ejecutas tu imagen manualmente. Ofrece el mayor control pero requiere más gestión.
