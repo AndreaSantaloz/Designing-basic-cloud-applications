@@ -1,0 +1,10 @@
+Estructura Inicial del Proyecto Django (Traducción al Español)
+
+Archivo/Directorio	Descripción
+manage.py	Una utilidad de línea de comandos que te permite interactuar con este proyecto Django de varias maneras. Puedes leer todos los detalles sobre manage.py en la documentación oficial sobre django-admin y manage.py.
+mysite/	Un directorio que es el paquete Python real de tu proyecto. Su nombre es el nombre del paquete Python que necesitarás usar para importar cualquier cosa dentro de él (por ejemplo, mysite.urls).
+mysite/__init__.py	Un archivo vacío que le indica a Python que este directorio debe considerarse un paquete Python. Si eres un principiante en Python, lee más sobre paquetes en la documentación oficial de Python.
+mysite/settings.py	Configuración de este proyecto Django. La documentación sobre Django settings te dirá todo sobre cómo funciona la configuración.
+mysite/urls.py	Las declaraciones de URL para este proyecto Django; una "tabla de contenidos" de tu sitio impulsado por Django. Puedes leer más sobre URLs en el despachador de URL.
+mysite/asgi.py	Un punto de entrada para que los servidores web compatibles con ASGI sirvan a tu proyecto. Consulta Cómo desplegar con ASGI para obtener más detalles.
+mysite/wsgi.py	Un punto de entrada para que los servidores web compatibles con WSGI sirvan a tu proyecto. Consulta Cómo desplegar con WSGI para obtener más detalles.
