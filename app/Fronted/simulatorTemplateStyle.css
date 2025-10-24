@@ -1,0 +1,19 @@
+.header{
+    background-color: aquamarine;
+    height:150px ;
+}
+.neuronal-network-operations{
+    display: flex;
+    justify-content: space-around;
+}
+.neuronal-network-operation{
+    margin-top: 50px;
+    border-radius: 50%;
+    background-color: aliceblue;
+    height: 55px;
+}
+#sceneBlock{
+    width:80%;
+    height:600px;
+   
+}
