@@ -1,5 +1,5 @@
 ---
-AWSTemplateFormatVersion: version date
+AWSTemplateFormatVersion: 2010-09-09
 
 Description: Designing a employee app
 
@@ -11,22 +11,317 @@ Metadata:
 
 
 Parameters:
-  set of parameters
+            VpcId:
+                  Type: AWS::EC2::VPC::Id
+                  Description: VPC
+            ImageName:
+                      Type: String
+                      Description: ECR Image Name
+                      Default: cubes-app:latest
+            SubnetIds:
+                      Type: List<AWS::EC2::Subnet::Id>
+                      Description: At least 2 Subnets
+            DBType:
+                    Type: String
+                    Default: postgres
+                    AllowedValues:
+                      - postgres
+            DBHost:
+                    Type: String
+                    Default: ""
+                    Description: DB Host (only DBType=postgres)
 
-Rules:
-  set of rules
+            DBName:
+                    Type: String
+                    Default: ""
+                    Description: DB Name (only DBType=postgres)
 
-Mappings:
-  set of mappings
+            DBUser:
+                    Type: String
+                    Default: ""
+                    Description: DB User (only DBType=postgres)
 
-Conditions:
-  set of conditions
-
-Transform:
-  set of transforms
+            DBPass:
+                    Type: String
+                    NoEcho: true
+                    Default: ""
+                    Description: DB PASS (only DBType=postgres)
 
 Resources:
-  set of resources
+          #Definimos la API Gateway con la Api rest
+          #Definimos VPCLink para que sea una conexión privada donde los params son nombre y TargetArns
+          #Definimos el tipo de APi que es la rest donde los params son nombre y descripcion
+          #Definimos dentro los tipos de url que hay con params y sin params
+          #Definimos los metodos POST,GET,GET ID,PUT,DELETE
+          #Definimos el desployment,stage y usageplan
+          #Definimos el ECS fargate donde luego definimos su tarea,grupo de seguridad,load balancer ALB y cluster 
+          # Este ECS es tipo de servicio
+          ECSService:
+                    Type: AWS::ECS::Service
+                    DependsOn:
+                      - Listener
+                    Properties:
+                      Cluster: !Ref ECSCluster
+                      ServiceName: cubesService
+                      TaskDefinition: !Ref TaskDefinition
+                      DesiredCount: 1
+                      LaunchType: FARGATE
+                      NetworkConfiguration:
+                        AwsvpcConfiguration:
+                          AssignPublicIp: ENABLED
+                          Subnets: !Ref SubnetIds
+                          SecurityGroups:
+                            - !Ref ECSSecurityGroup
+                      LoadBalancers:
+                        - ContainerName: cubesContainer
+                          ContainerPort: 8080
+                          TargetGroupArn: !Ref TargetGroup
 
+          ECSSecurityGroup:
+                          Type: AWS::EC2::SecurityGroup
+                          Properties:
+                                     GroupDescription: Security group for ECS tasks
+                                     VpcId: !Ref VpcId
+                                     SecurityGroupIngress:
+                                                          - IpProtocol: tcp
+                                                            FromPort: 8080
+                                                            ToPort: 8080
+                                                            CidrIp: 0.0.0.0/0
+          ALB:
+              Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+              Properties:
+                Name: cubesAlb
+                Type: application
+                Scheme: internet-facing
+                Subnets: !Ref SubnetIds
+
+          TargetGroup:
+              Type: AWS::ElasticLoadBalancingV2::TargetGroup
+              Properties:
+                Name: cubestargetGroup
+                Port: 8080
+                Protocol: HTTP
+                VpcId: !Ref VpcId
+                TargetType: ip
+                HealthCheckProtocol: HTTP
+                HealthCheckPath: /health
+
+          Listener:
+              Type: AWS::ElasticLoadBalancingV2::Listener
+              Properties:
+                DefaultActions:
+                  - Type: forward
+                    TargetGroupArn: !Ref TargetGroup
+                LoadBalancerArn: !Ref ALB
+                Port: 8080
+                Protocol: HTTP
+
+          ECSCluster:
+                    Type: AWS::ECS::Cluster
+                    Properties:
+                                ClusterName: cubesCluster
+
+          TaskDefinition:
+                          Type: AWS::ECS::TaskDefinition
+                          Properties:
+                            Family: cubesTask
+                            NetworkMode: awsvpc
+                            RequiresCompatibilities: 
+                                                     - FARGATE
+                            Cpu: 256
+                            Memory: 512
+                            ExecutionRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
+                            TaskRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
+                            ContainerDefinitions:
+                              - Name: cubesContainer
+                                Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ImageName}"
+                                PortMappings:
+                                            - ContainerPort: 8080
+                                Protocol: tcp
+                                LogConfiguration:
+                                  LogDriver: awslogs
+                                  Options:
+                                    awslogs-group: /ecs/cubes
+                                    awslogs-region: !Ref AWS::Region
+                                    awslogs-stream-prefix: cubes
+                                    awslogs-create-group: "true"
+                                Environment:
+                                  - Name: DB_TYPE
+                                    Value: !Ref DBType
+                                  - Name: DB_HOST
+                                    Value: !Ref DBHost
+                                  - Name: DB_NAME
+                                    Value: !Ref DBName
+                                  - Name: DB_USER
+                                    Value: !Ref DBUser
+                                  - Name: DB_PASS
+                                    Value: !Ref DBPass
+            
+
+          VPCLink:
+                  Type: AWS::ApiGateway::VpcLink
+                  Properties:
+                          Name: CubeVpclink
+                          TargetArns:
+                                    - !Ref ALB
+          RestApi:
+                  Type: AWS::APIGATEWAY::RestApi
+                  Properties:
+                            Name: CubeApi
+                            Description: Se basa en la API que gestionara el CRUD de la app
+          PathtoCubes:
+                  Type: AWS::ApiGateway::Resource
+                  Properties:
+                            RestApiId: !Ref RestApi
+                            ParentId: !GetAtt RestApi.RootResourceId
+                            PathPart: cubes
+          PathtoCubesId:
+                  Type: AWS::ApiGateway::Resource
+                  Properties:
+                            RestApiId: !Ref RestApi
+                            ParentId: !Ref PathtoCubes
+                            PathPart: "{id}"
+          PostCube:
+                  Type: AWS::ApiGateway::Method
+                  Properties:
+                           RestApiId: !Ref RestApi
+                           ResourceId: !Ref PathtoCubes
+                           HttpMethod: POST
+                           AuthorizationType: NONE
+                           ApiKeyRequired: true
+                           Integration:
+                             Type: HTTP_PROXY
+                             IntegrationHttpMethod: POST
+                             Uri: !Sub 
+                                        - "http://${ALBDNS}:8080/cubes"
+                                        - { ALBDNS: !GetAtt ALB.DNSName }
+                             ConnectionType: VPC_LINK
+                             ConnectionId: !Ref VPCLink
+          GetCubes:
+                  Type: AWS::ApiGateway::Method
+                  Properties:
+                           RestApiId: !Ref RestApi
+                           ResourceId: !Ref PathtoCubes
+                           HttpMethod: GET
+                           AuthorizationType: NONE
+                           ApiKeyRequired: true
+                           Integration:
+                             Type: HTTP_PROXY
+                             IntegrationHttpMethod: GET
+                             Uri: !Sub  
+                                      - "http://${ALBDNS}:8080/cubes"
+                                      - { ALBDNS: !GetAtt ALB.DNSName }
+                             ConnectionType: VPC_LINK
+                             ConnectionId: !Ref VPCLink
+          GetCubeId:
+                  Type: AWS::ApiGateway::Method
+                  Properties:
+                           RestApiId: !Ref RestApi
+                           ResourceId: !Ref PathtoCubesId
+                           HttpMethod: GET
+                           AuthorizationType: NONE
+                           ApiKeyRequired: true
+                           RequestParameters:
+                                            method.request.path.id: true
+                           Integration:
+                             Type: HTTP_PROXY
+                             IntegrationHttpMethod: GET
+                             Uri: !Sub 
+                                      - "http://${ALBDNS}:8080/cubes/{id}"
+                                      - { ALBDNS: !GetAtt ALB.DNSName } 
+                             ConnectionType: VPC_LINK
+                             ConnectionId: !Ref VPCLink
+                             RequestParameters:
+                                              integration.request.path.id: method.request.path.id
+          PutCubeId:
+                  Type: AWS::ApiGateway::Method
+                  Properties:
+                           RestApiId: !Ref RestApi
+                           ResourceId: !Ref PathtoCubesId
+                           HttpMethod: PUT
+                           AuthorizationType: NONE
+                           ApiKeyRequired: true
+                           RequestParameters:
+                                            method.request.path.id: true
+                           Integration:
+                             Type: HTTP_PROXY
+                             IntegrationHttpMethod: PUT
+                             Uri: !Sub 
+                                      - "http://${ALBDNS}:8080/cubes/{id}"
+                                      - { ALBDNS: !GetAtt ALB.DNSName }
+                             ConnectionType: VPC_LINK
+                             ConnectionId: !Ref VPCLink
+                             RequestParameters:
+                                              integration.request.path.id: method.request.path.id
+          DeleteCubeId:
+                      Type: AWS::ApiGateway::Method
+                      Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref PathtoCubesId
+                        HttpMethod: DELETE
+                        AuthorizationType: NONE
+                        ApiKeyRequired: true
+                        RequestParameters:
+                          method.request.path.id: true
+                        Integration:
+                          Type: HTTP_PROXY
+                          IntegrationHttpMethod: DELETE
+                          Uri: !Sub 
+                                      - "http://${ALBDNS}:8080/cubes/{id}"
+                                      - { ALBDNS: !GetAtt ALB.DNSName }
+                          ConnectionType: VPC_LINK
+                          ConnectionId: !Ref VPCLink
+                          RequestParameters:
+                            integration.request.path.id: method.request.path.id
+          # Para el despliegue de la aplicación
+          APIDeployment:
+                        Type: AWS::ApiGateway::Deployment
+                        DependsOn:
+                          - PostCube
+                          - GetCubes
+                          - GetCubeId
+                          - PutCubeId
+                          - DeleteCubeId
+                          
+                        Properties:
+                          RestApiId: !Ref RestApi
+
+          APIStage:
+                  Type: AWS::ApiGateway::Stage
+                  Properties:
+                             RestApiId: !Ref RestApi
+                             DeploymentId: !Ref APIDeployment
+                             StageName: prod
+
+          APIKey:
+                 Type: AWS::ApiGateway::ApiKey
+                 Properties:
+                           Name: cubes-api-key
+                           Enabled: true                           
+
+          UsagePlan:
+                    Type: AWS::ApiGateway::UsagePlan
+                    DependsOn: APIStage
+                    Properties:
+                               UsagePlanName: cubes-usage-plan
+                               ApiStages:
+                                         - ApiId: !Ref RestApi
+                                           Stage: !Ref APIStage
+
+          UsagePlanKey:
+                      Type: AWS::ApiGateway::UsagePlanKey
+                      Properties:
+                                KeyId: !Ref APIKey
+                                KeyType: API_KEY
+                                UsagePlanId: !Ref UsagePlan
 Outputs:
-  set of outputs
+    ALBDNSName:
+                Description: DNS del ALB
+                Value: !GetAtt ALB.DNSName
+    APIEndpoint:
+                Description: API Gateway URL
+                Value: !Sub "https://${RestApi}.execute-api.us-east-1.amazonaws.com/prod"
+
+    APIKeyId:
+            Description: API Key ID
+            Value: !Ref APIKey
