@@ -1,32 +1,616 @@
----
-AWSTemplateFormatVersion: version date
+AWSTemplateFormatVersion: '2010-09-09'
 
-Description: Designing a employee app
+Description: Designing a employee app with Serverless Architecture
 
 Metadata:
-          Author: "Andrea Santana López"
-          Title: "Cloud Computing First practice with decoupled architecture"
-          version: "1.0.0"
-          Purpose: "It is designing simple app in AWS"
-
+  Author: "Andrea Santana López"
+  Title: "Cloud Computing First practice with decoupled serverless architecture"
+  Version: "1.0.0"
+  Purpose: "Simple serverless app in AWS with Lambda and RDS"
 
 Parameters:
-  set of parameters
+  DBUsername:
+    Type: String
+    Default: admin
+    Description: Database admin username
+    NoEcho: true
 
-Rules:
-  set of rules
+  DBPassword:
+    Type: String
+    Description: Database admin password
+    NoEcho: true
 
-Mappings:
-  set of mappings
+  DBName:
+    Type: String
+    Default: cubesdb
+    Description: Database name
 
-Conditions:
-  set of conditions
+  VPCId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID where RDS will be deployed
 
-Transform:
-  set of transforms
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet::Id
+    Description: First private subnet for RDS
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet::Id
+    Description: Second private subnet for RDS
 
 Resources:
-  set of resources
+  # RDS Instance (MySQL)
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: cubes-db
+      DBName: !Ref DBName
+      Engine: mysql
+      EngineVersion: 8.0
+      DBInstanceClass: db.t3.micro
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      AllocatedStorage: 20
+      StorageType: gp2
+      PubliclyAccessible: false
+      VPCSecurityGroups:
+        - !GetAtt RDSSecurityGroup.GroupId
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      BackupRetentionPeriod: 1
+      MultiAZ: false
+
+  # DB Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS instance
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  # Security Group para RDS
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS instance
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !GetAtt LambdaSecurityGroup.GroupId
+
+  # Security Group para Lambda
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda accessing RDS
+      VpcId: !Ref VPCId
+
+  # Lambda principal para todas las operaciones CRUD
+  CubesLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CubesCRUDHandler
+      Handler: index.handler
+      Runtime: nodejs18.x
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          const mysql = require('mysql2/promise');
+          
+          let pool = null;
+          
+          function initPool() {
+            if (!pool) {
+              pool = mysql.createPool({
+                host: process.env.DB_HOST,
+                user: process.env.DB_USER,
+                password: process.env.DB_PASSWORD,
+                database: process.env.DB_NAME,
+                port: 3306,
+                connectionLimit: 10,
+                acquireTimeout: 60000,
+                timeout: 60000
+              });
+            }
+            return pool;
+          }
+          
+          exports.handler = async (event) => {
+            console.log('Event:', JSON.stringify(event, null, 2));
+            
+            const { httpMethod, path, pathParameters, body, requestContext } = event;
+            const id = pathParameters?.id;
+            
+            const db = initPool();
+            
+            try {
+              switch (httpMethod) {
+                case 'GET':
+                  if (id) {
+                    // GET /cubes/{id}
+                    const [rows] = await db.execute(
+                      'SELECT * FROM cubes WHERE id = ?',
+                      [id]
+                    );
+                    
+                    if (rows.length === 0) {
+                      return {
+                        statusCode: 404,
+                        headers: { 
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                        },
+                        body: JSON.stringify({ error: 'Cube not found' })
+                      };
+                    }
+                    
+                    return {
+                      statusCode: 200,
+                      headers: { 
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                      },
+                      body: JSON.stringify(rows[0])
+                    };
+                  } else {
+                    // GET /cubes
+                    const [rows] = await db.execute(
+                      'SELECT * FROM cubes ORDER BY created_at DESC'
+                    );
+                    
+                    return {
+                      statusCode: 200,
+                      headers: { 
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                      },
+                      body: JSON.stringify(rows)
+                    };
+                  }
+                  
+                case 'POST':
+                  // POST /cubes
+                  const requestBody = JSON.parse(body || '{}');
+                  const { name, description, color, size } = requestBody;
+                  
+                  if (!name) {
+                    return {
+                      statusCode: 400,
+                      headers: { 
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                      },
+                      body: JSON.stringify({ error: 'Name is required' })
+                    };
+                  }
+                  
+                  const [result] = await db.execute(
+                    'INSERT INTO cubes (name, description, color, size) VALUES (?, ?, ?, ?)',
+                    [name, description, color, size]
+                  );
+                  
+                  const [newCube] = await db.execute(
+                    'SELECT * FROM cubes WHERE id = ?',
+                    [result.insertId]
+                  );
+                  
+                  return {
+                    statusCode: 201,
+                    headers: { 
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*'
+                    },
+                    body: JSON.stringify(newCube[0])
+                  };
+                  
+                case 'PUT':
+                  // PUT /cubes/{id}
+                  if (!id) {
+                    return {
+                      statusCode: 400,
+                      headers: { 
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                      },
+                      body: JSON.stringify({ error: 'ID is required' })
+                    };
+                  }
+                  
+                  const updateBody = JSON.parse(body || '{}');
+                  const { name: updateName, description: updateDesc, color: updateColor, size: updateSize } = updateBody;
+                  
+                  await db.execute(
+                    'UPDATE cubes SET name = ?, description = ?, color = ?, size = ?, updated_at = NOW() WHERE id = ?',
+                    [updateName, updateDesc, updateColor, updateSize, id]
+                  );
+                  
+                  const [updatedCube] = await db.execute(
+                    'SELECT * FROM cubes WHERE id = ?',
+                    [id]
+                  );
+                  
+                  if (updatedCube.length === 0) {
+                    return {
+                      statusCode: 404,
+                      headers: { 
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                      },
+                      body: JSON.stringify({ error: 'Cube not found' })
+                    };
+                  }
+                  
+                  return {
+                    statusCode: 200,
+                    headers: { 
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*'
+                    },
+                    body: JSON.stringify(updatedCube[0])
+                  };
+                  
+                case 'DELETE':
+                  // DELETE /cubes/{id}
+                  if (!id) {
+                    return {
+                      statusCode: 400,
+                      headers: { 
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                      },
+                      body: JSON.stringify({ error: 'ID is required' })
+                    };
+                  }
+                  
+                  const [existing] = await db.execute(
+                    'SELECT * FROM cubes WHERE id = ?',
+                    [id]
+                  );
+                  
+                  if (existing.length === 0) {
+                    return {
+                      statusCode: 404,
+                      headers: { 
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                      },
+                      body: JSON.stringify({ error: 'Cube not found' })
+                    };
+                  }
+                  
+                  await db.execute(
+                    'DELETE FROM cubes WHERE id = ?',
+                    [id]
+                  );
+                  
+                  return {
+                    statusCode: 200,
+                    headers: { 
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*'
+                    },
+                    body: JSON.stringify({ message: 'Cube deleted successfully' })
+                  };
+                  
+                default:
+                  return {
+                    statusCode: 405,
+                    headers: { 
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*'
+                    },
+                    body: JSON.stringify({ error: 'Method not allowed' })
+                  };
+              }
+            } catch (error) {
+              console.error('Database error:', error);
+              return {
+                statusCode: 500,
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*'
+                },
+                body: JSON.stringify({ 
+                  error: 'Internal server error',
+                  message: error.message 
+                })
+              };
+            }
+          };
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          DB_HOST: !GetAtt RDSInstance.Endpoint.Address
+          DB_USER: !Ref DBUsername
+          DB_PASSWORD: !Ref DBPassword
+          DB_NAME: !Ref DBName
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+
+  # IAM Role para Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CubesLambdaExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: RDSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-db:connect
+                Resource: !Sub "arn:aws:rds-db:${AWS::Region}:${AWS::AccountId}:dbuser:${RDSInstance}/${DBUsername}"
+        - PolicyName: VPCAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:CreateNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DeleteNetworkInterface
+                  - ec2:AttachNetworkInterface
+                  - ec2:DetachNetworkInterface
+                Resource: "*"
+
+  # API Gateway Resources
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: CubeApi
+      Description: API para gestionar el CRUD de cubes
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  PathtoCubes:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: cubes
+
+  PathtoCubesId:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref PathtoCubes
+      PathPart: "{id}"
+
+  # API Gateway Methods con Lambda Integration
+  PostCube:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref PathtoCubes
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CubesLambda.Arn}/invocations"
+
+  GetCubes:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref PathtoCubes
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CubesLambda.Arn}/invocations"
+
+  GetCubeId:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref PathtoCubesId
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      RequestParameters:
+        method.request.path.id: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CubesLambda.Arn}/invocations"
+
+  PutCubeId:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref PathtoCubesId
+      HttpMethod: PUT
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      RequestParameters:
+        method.request.path.id: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CubesLambda.Arn}/invocations"
+
+  DeleteCubeId:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref PathtoCubesId
+      HttpMethod: DELETE
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      RequestParameters:
+        method.request.path.id: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CubesLambda.Arn}/invocations"
+
+  # Permisos para que API Gateway invoque Lambda
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CubesLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "${RestApi}/*/*"
+
+  # Deployment y Stage
+  APIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - PostCube
+      - GetCubes
+      - GetCubeId
+      - PutCubeId
+      - DeleteCubeId
+    Properties:
+      RestApiId: !Ref RestApi
+
+  APIStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref APIDeployment
+      StageName: prod
+
+  # API Key y Usage Plan
+  APIKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: cubes-api-key
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref RestApi
+          StageName: !Ref APIStage
+
+  UsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: APIStage
+    Properties:
+      UsagePlanName: cubes-usage-plan
+      ApiStages:
+        - ApiId: !Ref RestApi
+          Stage: !Ref APIStage
+      Throttle:
+        BurstLimit: 100
+        RateLimit: 50
+      Quota:
+        Limit: 1000
+        Period: DAY
+
+  UsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref APIKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref UsagePlan
+
+  # Lambda para inicializar la base de datos
+  DBInitLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CubesDBInit
+      Handler: index.handler
+      Runtime: nodejs18.x
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          const mysql = require('mysql2/promise');
+          
+          exports.handler = async (event) => {
+            const connection = await mysql.createConnection({
+              host: process.env.DB_HOST,
+              user: process.env.DB_USER,
+              password: process.env.DB_PASSWORD,
+              multipleStatements: true
+            });
+            
+            try {
+              await connection.execute(`
+                CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME};
+                USE ${process.env.DB_NAME};
+                
+                CREATE TABLE IF NOT EXISTS cubes (
+                  id INT AUTO_INCREMENT PRIMARY KEY,
+                  name VARCHAR(255) NOT NULL,
+                  description TEXT,
+                  color VARCHAR(50),
+                  size INT,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                );
+                
+                INSERT IGNORE INTO cubes (name, description, color, size) VALUES
+                ('Cube One', 'First example cube', 'red', 10),
+                ('Cube Two', 'Second example cube', 'blue', 15);
+              `);
+              
+              return {
+                statusCode: 200,
+                body: JSON.stringify({ message: 'Database initialized successfully' })
+              };
+            } catch (error) {
+              console.error('Init error:', error);
+              return {
+                statusCode: 500,
+                body: JSON.stringify({ error: error.message })
+              };
+            } finally {
+              await connection.end();
+            }
+          };
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          DB_HOST: !GetAtt RDSInstance.Endpoint.Address
+          DB_USER: !Ref DBUsername
+          DB_PASSWORD: !Ref DBPassword
+          DB_NAME: !Ref DBName
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
 
 Outputs:
-  set of outputs
+  APIEndpoint:
+    Description: API Gateway URL
+    Value: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+
+  APIKeyId:
+    Description: API Key ID
+    Value: !Ref APIKey
+
+  RDSEndpoint:
+    Description: RDS Endpoint
+    Value: !GetAtt RDSInstance.Endpoint.Address
+
+  LambdaFunctionName:
+    Description: Main Lambda Function Name
+    Value: !Ref CubesLambda
+
+  DBInitLambdaName:
+    Description: Database Initialization Lambda
+    Value: !Ref DBInitLambda
