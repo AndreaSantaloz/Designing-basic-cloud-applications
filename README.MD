@@ -51,4 +51,12 @@ y la referencia  !Ref TargetGroup.
 
 ## Arquitectura Desacoplada
 
+
 ## Diagrama Arquitectura Desacoplada
+
+
+## Princing
+
+| Resources    |Una hora(60 min)|Un día (24 horas) |Mes de 30 días | Mes de 31 días |Mes de 28 días|Mes de 29 días|
+|--------------|----------------|------------------|---------------|----------------|--------------|--------------|
+| ELB          |0,255           |6,12              |183,6          |189,72          |171,36        |177,48        |
