@@ -48,7 +48,7 @@ y la referencia  !Ref TargetGroup.
 
 
 ## Diagrama Arquitectura Acoplada
-
+!["Diagrama Acoplada"](Arquitectura_Completa_CFN_Ejemplo.png)
 
 ## Princing Acoplada
 
@@ -72,3 +72,4 @@ y la referencia  !Ref TargetGroup.
 | Rest Api     |0.5993          |14.38             |431.50         |445.89          |402.73        |417.12        |5,249.75       |5,264.14       |
 | DynamoDB     |0.00            |0.0               |0.0            |0.0             |0.0           |0.0           |0.0            |0.0            |
 | lambdas      |0.00            |0.0               |0.0            |0.0             |0.0           |0.0           |0.0            |0.0            |
+
