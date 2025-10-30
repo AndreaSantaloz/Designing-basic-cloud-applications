@@ -49,6 +49,26 @@ y la referencia  !Ref TargetGroup.
 
 ## Diagrama Arquitectura Acoplada
 
+
+## Princing Acoplada
+
+| Resources    |Una hora(60 min)|Un día (24 horas) |Mes de 30 días | Mes de 31 días |Mes de 28 días|Mes de 29 días|Año de 365 días|Año de 366 días|
+|--------------|----------------|------------------|---------------|----------------|--------------|--------------|---------------|---------------|
+| ELB          |0,255           |6,12              |183,6          |189,72          |171,36        |177,48        |2.233,8        |2.239,92       |
+| Rest Api     |0.5993          |14.38             |431.50         |445.89          |402.73        |417.12        |5,249.75       |5,264.14       |
+| ECS          |0.01            |0.30              |8.88           |9.18            |8.29          |8.59          |108.19         |108.49         |
+| DynamoDB     |0.00            |0.0               |0.0            |0.0             |0.0           |0.0           |0.0            |0.0            |
+
 ## Arquitectura Desacoplada
 
+
 ## Diagrama Arquitectura Desacoplada
+
+
+## Princing Desacoplada
+
+| Resources    |Una hora(60 min)|Un día (24 horas) |Mes de 30 días | Mes de 31 días |Mes de 28 días|Mes de 29 días|Año de 365 días|Año de 366 días|
+|--------------|----------------|------------------|---------------|----------------|--------------|--------------|---------------|---------------|
+| Rest Api     |0.5993          |14.38             |431.50         |445.89          |402.73        |417.12        |5,249.75       |5,264.14       |
+| DynamoDB     |0.00            |0.0               |0.0            |0.0             |0.0           |0.0           |0.0            |0.0            |
+| lambdas      |0.00            |0.0               |0.0            |0.0             |0.0           |0.0           |0.0            |0.0            |
