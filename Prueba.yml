@@ -1,0 +1,27 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Mi primera prueba con cloudformation
+
+Resource: 
+
+
+        #Api Gateway:Metodos,recursos(normalmente) y rest Api
+
+        #Punto de Acceso
+        VpcLink:
+                type: AWS::ApiGateway::VpcLink
+                Properties:
+                          name: VpcUser
+                          TargetArns:!Ref NLB
+        RestApi:
+                type: AWS::ApiGateway::RestApi
+                Properties:
+                          name: UsersApi
+                          descripcion: api para usuarios
+
+        UserUrl:
+                type: AWS::ApiGateway::Resource
+                Properties:
+                          
+        
+      
