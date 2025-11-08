@@ -1,0 +1,18 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Solo ECR Repository'
+
+Parameters:
+  RepositoryName:
+    Type: String
+    Default: mi-repositorio-ecr
+
+Resources:
+  MyECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref RepositoryName
+      ImageTagMutability: MUTABLE
+
+Outputs:
+  RepositoryURI:
+    Value: !GetAtt MyECRRepository.RepositoryUri

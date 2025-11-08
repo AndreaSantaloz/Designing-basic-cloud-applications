@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Lambda con Docker en ECR - Learner Lab'
+
+Parameters:
+  ImageTag:
+    Type: String
+    Default: latest
+    Description: Tag para la imagen Docker
+
+Resources:
+  # NOTA: El repositorio ECR ya debe existir, NO se crea aquí
+  DockerLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: entregauno-docker-lambda
+      Description: Lambda con Docker para ENTREGAUNOCN
+      PackageType: Image
+      Role: !Sub 'arn:aws:iam::${AWS::AccountId}:role/LabRole'
+      Code:
+        ImageUri: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/entregauno-lambda-docker:${ImageTag}'
+      Timeout: 30
+      MemorySize: 128
+
+Outputs:
+  LambdaFunctionArn:
+    Description: ARN de la función Lambda
+    Value: !GetAtt DockerLambdaFunction.Arn
+  
+  LambdaFunctionName:
+    Description: Nombre de la función Lambda
+    Value: !Ref DockerLambdaFunction

@@ -1,5 +1,23 @@
 {
+  "name": "desacoplada",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/AndreaSantaloz/CN-Dise-o-de-aplicaciones-b-sicas-en-la-nube#readme",
+  "bugs": {
+    "url": "https://github.com/AndreaSantaloz/CN-Dise-o-de-aplicaciones-b-sicas-en-la-nube/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AndreaSantaloz/CN-Dise-o-de-aplicaciones-b-sicas-en-la-nube.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
   "dependencies": {
-    "three": "^0.180.0"
+    "@aws-sdk/client-s3": "^3.925.0"
   }
 }

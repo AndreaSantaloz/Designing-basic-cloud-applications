@@ -1,0 +1,20 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECR Repository for Lambda Container'
+Parameters:
+  RepositoryName:
+    Type: String
+    Description: "Nombre del repositorio ECR"
+    
+Resources:
+  ECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref RepositoryName
+      ImageTagMutability: MUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+Outputs:
+  RepositoryURI:
+    Description: "URI del repositorio ECR"
+    Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${RepositoryName}"

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Probador de API Completo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .section {
+            margin: 15px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+        }
+        input, button {
+            margin: 5px;
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #resultado {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            background: #f9f9f9;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+        .success {
+            border-left: 4px solid #28a745;
+        }
+        .error {
+            border-left: 4px solid #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Probador de API de Usuarios - CRUD COMPLETO</h1>
+    
+    <!-- OBTENER TODOS LOS USUARIOS -->
+    <div class="section">
+        <h3>📋 Obtener todos los usuarios</h3>
+        <button onclick="getUsuarios()">GET /api/usuarios</button>
+    </div>
+    
+    <!-- OBTENER USUARIO POR ID -->
+    <div class="section">
+        <h3>🔍 Buscar usuario por ID</h3>
+        <input type="number" id="searchId" placeholder="ID" value="1">
+        <button onclick="getUsuarioById()">GET /api/usuarios/:id</button>
+    </div>
+    
+    <!-- CREAR NUEVO USUARIO -->
+    <div class="section">
+        <h3>➕ Crear nuevo usuario</h3>
+        <input type="text" id="nombreInput" placeholder="Nombre">
+        <input type="email" id="emailInput" placeholder="Email">
+        <button onclick="createUsuario()">POST /api/usuarios</button>
+    </div>
+    
+    <!-- 🆕 ACTUALIZAR USUARIO EXISTENTE -->
+    <div class="section">
+        <h3>✏️ Actualizar usuario existente</h3>
+        <input type="number" id="updateId" placeholder="ID del usuario" value="1">
+        <input type="text" id="updateNombre" placeholder="Nuevo nombre">
+        <input type="email" id="updateEmail" placeholder="Nuevo email">
+        <button onclick="updateUsuario()">PUT /api/usuarios/:id</button>
+    </div>
+    
+    <!-- ELIMINAR USUARIO -->
+    <div class="section">
+        <h3>🗑️ Eliminar usuario</h3>
+        <input type="number" id="deleteId" placeholder="ID a eliminar" value="1">
+        <button onclick="deleteUsuario()">DELETE /api/usuarios/:id</button>
+    </div>
+    
+    <!-- RESULTADOS -->
+    <div id="resultado">
+        Los resultados de las operaciones aparecerán aquí...
+    </div>
+
+    <script>
+        // Obtener todos los usuarios
+        async function getUsuarios() {
+            try {
+                const response = await fetch('/api/usuarios');
+                const data = await response.json();
+                mostrarResultado(data);
+            } catch (error) {
+                mostrarResultado({ error: error.toString() }, true);
+            }
+        }
+
+        // Obtener usuario por ID
+        async function getUsuarioById() {
+            const id = document.getElementById('searchId').value;
+            
+            try {
+                const response = await fetch(`/api/usuarios/${id}`);
+                const data = await response.json();
+                mostrarResultado(data);
+            } catch (error) {
+                mostrarResultado({ error: error.toString() }, true);
+            }
+        }
+
+        // Crear nuevo usuario
+        async function createUsuario() {
+            const nombre = document.getElementById('nombreInput').value;
+            const email = document.getElementById('emailInput').value;
+            
+            if (!nombre || !email) {
+                mostrarResultado({ error: 'Nombre y email son requeridos' }, true);
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/usuarios', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ nombre, email })
+                });
+                const data = await response.json();
+                mostrarResultado(data);
+                
+                // Limpiar campos después de crear
+                document.getElementById('nombreInput').value = '';
+                document.getElementById('emailInput').value = '';
+            } catch (error) {
+                mostrarResultado({ error: error.toString() }, true);
+            }
+        }
+
+        // 🆕 ACTUALIZAR USUARIO EXISTENTE
+        async function updateUsuario() {
+            const id = document.getElementById('updateId').value;
+            const nombre = document.getElementById('updateNombre').value;
+            const email = document.getElementById('updateEmail').value;
+            
+            // Validar que al menos un campo tenga datos
+            if (!nombre && !email) {
+                mostrarResultado({ error: 'Debe proporcionar al menos un campo para actualizar' }, true);
+                return;
+            }
+
+            try {
+                // Crear objeto solo con los campos que tienen datos
+                const updateData = {};
+                if (nombre) updateData.nombre = nombre;
+                if (email) updateData.email = email;
+
+                const response = await fetch(`/api/usuarios/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(updateData)
+                });
+                const data = await response.json();
+                mostrarResultado(data);
+                
+                // Limpiar campos después de actualizar
+                document.getElementById('updateNombre').value = '';
+                document.getElementById('updateEmail').value = '';
+            } catch (error) {
+                mostrarResultado({ error: error.toString() }, true);
+            }
+        }
+
+        // Eliminar usuario
+        async function deleteUsuario() {
+            const id = document.getElementById('deleteId').value;
+            
+            try {
+                const response = await fetch(`/api/usuarios/${id}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                mostrarResultado(data);
+            } catch (error) {
+                mostrarResultado({ error: error.toString() }, true);
+            }
+        }
+
+        // Función para mostrar resultados
+        function mostrarResultado(data, esError = false) {
+            const resultado = document.getElementById('resultado');
+            resultado.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            resultado.className = esError ? 'error' : 'success';
+        }
+
+        // Cargar usuarios al iniciar la página
+        window.onload = function() {
+            getUsuarios();
+        };
+    </script>
+</body>
+</html>

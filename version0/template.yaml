@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECR para despliegue automatico'
+
+Parameters:
+  RepositoryName:
+    Type: String
+    Default: mi-repositorio-ecr
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: At least 2 Subnets
+    Default: "subnet-0993f0b9d12b7b4af ,subnet-0dfbc3030ac171274"
+
+Resources:
+  MyECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref RepositoryName
+      ImageTagMutability: MUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+  
+  MyNLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: users-nlb
+      Type: network
+      Scheme: internal
+      Subnets: !Ref SubnetIds
+
+Outputs:
+  RepositoryURI:
+    Description: "URI para push/pull de imagenes"
+    Value: !GetAtt MyECRRepository.RepositoryUri
+  RepositoryNameOutput:
+    Description: "Nombre del repositorio"
+    Value: !Ref RepositoryName
+  NLBName:
+    Description: "Nombre del Network Load Balancer"
+    Value: !Ref MyNLB
