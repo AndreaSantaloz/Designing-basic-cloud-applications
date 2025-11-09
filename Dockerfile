@@ -1,11 +1,12 @@
 ﻿FROM public.ecr.aws/lambda/nodejs:18
 
-# Copiar archivos de la aplicación
+WORKDIR ${LAMBDA_TASK_ROOT}
+
 COPY package*.json ./
 RUN npm install
 
-# Copiar el código
-COPY . .
+# Copiar backend y frontend
+COPY index.js ./
 
-# Comando que Lambda ejecutará
-CMD [ "lambda.handler" ]
+
+CMD [ "index.handler" ]

@@ -28,30 +28,24 @@ try {
     HandleError "No hay permisos de AWS. Verifica tu configuración."
 }
 
-# --- Paso 1: Crear o actualizar repositorio ECR ---
-Write-Host "`n1. CREANDO O ACTUALIZANDO ECR..." -ForegroundColor Yellow
+# --- Paso 1: Crear repositorio ECR ---
+Write-Host "`n1. CREANDO ECR..." -ForegroundColor Yellow
 try {
-    # Verificar si el stack existe
-    $ECRStackExists = aws cloudformation describe-stacks --stack-name $ECRStackName --region $Region 2>$null
+    Write-Host "   Creando stack de ECR..." -ForegroundColor Yellow
+    aws cloudformation create-stack `
+      --stack-name $ECRStackName `
+      --template-body file://ecr-template.yaml `
+      --region $Region `
+      --parameters ParameterKey=RepositoryName,ParameterValue=$RepoName `
+      --capabilities CAPABILITY_NAMED_IAM
+    
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "   Creando nuevo stack de ECR..." -ForegroundColor Yellow
-        $result = aws cloudformation create-stack `
-          --stack-name $ECRStackName `
-          --template-body file://ecr-template.yaml `
-          --region $Region `
-          --parameters ParameterKey=RepositoryName,ParameterValue=$RepoName `
-          --capabilities CAPABILITY_NAMED_IAM
-        
-        if ($LASTEXITCODE -ne 0) {
-            HandleError "No se pudo crear el stack de ECR. Verifica permisos."
-        }
-        
-        Write-Host "   Esperando a que el stack de ECR esté listo..." -ForegroundColor Yellow
-        aws cloudformation wait stack-create-complete --stack-name $ECRStackName --region $Region
-        Write-Host "   ✅ Stack de ECR creado" -ForegroundColor Green
-    } else {
-        Write-Host "   ✅ El stack de ECR ya existe" -ForegroundColor DarkYellow
+        HandleError "No se pudo crear el stack de ECR. Verifica permisos."
     }
+    
+    Write-Host "   Esperando a que el stack de ECR esté listo..." -ForegroundColor Yellow
+    aws cloudformation wait stack-create-complete --stack-name $ECRStackName --region $Region
+    Write-Host "   ✅ Stack de ECR creado" -ForegroundColor Green
 } catch {
     HandleError "Error al crear el stack de ECR: $($_.Exception.Message)"
 }
@@ -88,11 +82,6 @@ try {
 # --- Paso 4: Construir imagen Docker ---
 Write-Host "4. CONSTRUYENDO IMAGEN DOCKER..." -ForegroundColor Yellow
 try {
-    # Verificar que Dockerfile existe
-    if (-not (Test-Path "Dockerfile")) {
-        HandleError "No se encuentra Dockerfile en el directorio actual"
-    }
-    
     docker buildx create --use 2>&1 | Out-Null
     docker buildx build --platform $TargetPlatform --load -t $ImageName $DockerfilePath
     if ($LASTEXITCODE -ne 0) {
@@ -116,41 +105,26 @@ try {
 # --- Paso 6: Desplegar Lambda y API Gateway ---
 Write-Host "6. DESPLEGANDO LAMBDA Y API GATEWAY..." -ForegroundColor Yellow
 try {
-    $LambdaStackExists = aws cloudformation describe-stacks --stack-name $LambdaStackName --region $Region 2>$null
+    Write-Host "   Creando stack de Lambda..." -ForegroundColor Yellow
+    aws cloudformation create-stack `
+      --stack-name $LambdaStackName `
+      --template-body file://decoupleapi.yaml `
+      --region $Region `
+      --parameters ParameterKey=ImageUri,ParameterValue="${ECR_URI}:latest" `
+      --capabilities CAPABILITY_IAM
+      
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "   Creando nuevo stack de Lambda..." -ForegroundColor Yellow
-        aws cloudformation create-stack `
-          --stack-name $LambdaStackName `
-          --template-body file://api.yaml `
-          --region $Region `
-          --parameters ParameterKey=ImageUri,ParameterValue="${ECR_URI}:latest" `
-          --capabilities CAPABILITY_IAM
-          
-        if ($LASTEXITCODE -ne 0) {
-            HandleError "No se pudo crear el stack de Lambda. Verifica el template."
-        }
-        
-        Write-Host "   Esperando a que el stack de Lambda esté listo..." -ForegroundColor Yellow
-        aws cloudformation wait stack-create-complete --stack-name $LambdaStackName --region $Region
-        Write-Host "   ✅ Stack de Lambda creado" -ForegroundColor Green
-    } else {
-        Write-Host "   Actualizando stack existente de Lambda..." -ForegroundColor Yellow
-        aws cloudformation update-stack `
-          --stack-name $LambdaStackName `
-          --template-body file://api.yaml `
-          --region $Region `
-          --parameters ParameterKey=ImageUri,ParameterValue="${ECR_URI}:latest" `
-          --capabilities CAPABILITY_IAM
-          
-        Write-Host "   Esperando a que la actualización termine..." -ForegroundColor Yellow
-        aws cloudformation wait stack-update-complete --stack-name $LambdaStackName --region $Region
-        Write-Host "   ✅ Stack de Lambda actualizado" -ForegroundColor Green
+        HandleError "No se pudo crear el stack de Lambda. Verifica el template."
     }
+    
+    Write-Host "   Esperando a que el stack de Lambda esté listo..." -ForegroundColor Yellow
+    aws cloudformation wait stack-create-complete --stack-name $LambdaStackName --region $Region
+    Write-Host "   ✅ Stack de Lambda creado" -ForegroundColor Green
 } catch {
     HandleError "Error al desplegar el stack de Lambda: $($_.Exception.Message)"
 }
 
-# --- Paso 7: Obtener resultados ---
+# --- Paso 7: Obtener resultados de CloudFormation ---
 Write-Host "7. OBTENIENDO RESULTADOS..." -ForegroundColor Yellow
 try {
     $Outputs = aws cloudformation describe-stacks `
@@ -167,38 +141,28 @@ try {
 }
 
 # --- MOSTRAR RESULTADOS FINALES ---
-Write-Host "`n" + "="*50 -ForegroundColor Cyan
+Write-Host "`n" + "="*60 -ForegroundColor Green
 Write-Host "DESPLIEGUE COMPLETADO EXITOSAMENTE" -ForegroundColor Green
-Write-Host "="*50 -ForegroundColor Cyan
+Write-Host "="*60 -ForegroundColor Green
 
 if ($Outputs) {
     foreach ($output in $Outputs) {
         switch ($output.OutputKey) {
             "ApiUrl" { 
                 Write-Host "`nURL DE LA API: $($output.OutputValue)" -ForegroundColor Yellow
-                Write-Host "   Frontend: $($output.OutputValue)/" -ForegroundColor White
-                Write-Host "   API: $($output.OutputValue)/users" -ForegroundColor White
+                Write-Host "   Frontend: frontend/index.html" -ForegroundColor White
+                Write-Host "   Endpoint principal: $($output.OutputValue)/users" -ForegroundColor White
             }
             "LambdaFunctionName" { 
                 Write-Host "LAMBDA: $($output.OutputValue)" -ForegroundColor Cyan
             }
-            "ApiKeyValue" { 
-                Write-Host "API KEY: $($output.OutputValue)" -ForegroundColor Magenta
-                Write-Host "   Header: x-api-key: $($output.OutputValue)" -ForegroundColor White
-            }
         }
     }
-} else {
-    Write-Host "`nObtén los outputs manualmente con:" -ForegroundColor Yellow
-    Write-Host "aws cloudformation describe-stacks --stack-name $LambdaStackName --region $Region" -ForegroundColor White
 }
 
-Write-Host "`nENDPOINTS DISPONIBLES:" -ForegroundColor Green
-Write-Host "   GET    /users          - Listar usuarios" -ForegroundColor White
-Write-Host "   POST   /users          - Crear usuario" -ForegroundColor White
-Write-Host "   GET    /users/{id}     - Obtener usuario" -ForegroundColor White
-Write-Host "   PUT    /users/{id}     - Actualizar usuario" -ForegroundColor White
-Write-Host "   DELETE /users/{id}     - Eliminar usuario" -ForegroundColor White
+Write-Host "`nINSTRUCCIONES RAPIDAS:" -ForegroundColor Green
+Write-Host "   1. Abre frontend/index.html en tu navegador" -ForegroundColor White
+Write-Host "   2. Asegurate de actualizar la URL de la API en el frontend" -ForegroundColor White
+Write-Host "   3. Prueba los endpoints con tu frontend" -ForegroundColor White
 
-Write-Host "`nRECUERDA INCLUIR EL HEADER: x-api-key" -ForegroundColor Yellow
 Write-Host "`nTu API esta lista para usar!" -ForegroundColor Green
