@@ -1,5 +1,5 @@
 # ==============================================================================
-# CONFIGURACIÓN COMPLETA
+# CONFIGURACIÓN COMPLETA - SIN FRONTEND
 # ==============================================================================
 $ECRStackName = "mi-ecr-stack"
 $LambdaStackName = "lambdas-stack"
@@ -74,7 +74,7 @@ try {
     
     $ECRServer = $ECR_URI.Split("/")[0]
     $ecrLogin | docker login --username AWS --password-stdin $ECRServer
-    Write-Host "   ✅ Login exitoso" -ForegroundColor Green
+    Write-Host "    Login exitoso" -ForegroundColor Green
 } catch {
     HandleError "Fallo en el login de Docker a ECR"
 }
@@ -87,7 +87,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         HandleError "Fallo al construir la imagen Docker"
     }
-    Write-Host "   ✅ Imagen construida exitosamente" -ForegroundColor Green
+    Write-Host "    Imagen construida exitosamente" -ForegroundColor Green
 } catch {
     HandleError "Fallo al construir la imagen Docker: $($_.Exception.Message)"
 }
@@ -97,12 +97,12 @@ Write-Host "5. SUBIENDO IMAGEN A ECR..." -ForegroundColor Yellow
 try {
     docker tag "${ImageName}:latest" "${ECR_URI}:latest"
     docker push "${ECR_URI}:latest"
-    Write-Host "   ✅ Imagen subida exitosamente" -ForegroundColor Green
+    Write-Host "    Imagen subida exitosamente" -ForegroundColor Green
 } catch {
     HandleError "Fallo al subir la imagen a ECR"
 }
 
-# --- Paso 6: Desplegar Lambda y API Gateway ---
+# --- Paso 6: Desacoplada
 Write-Host "6. DESPLEGANDO LAMBDA Y API GATEWAY..." -ForegroundColor Yellow
 try {
     Write-Host "   Creando stack de Lambda..." -ForegroundColor Yellow
@@ -119,7 +119,7 @@ try {
     
     Write-Host "   Esperando a que el stack de Lambda esté listo..." -ForegroundColor Yellow
     aws cloudformation wait stack-create-complete --stack-name $LambdaStackName --region $Region
-    Write-Host "   ✅ Stack de Lambda creado" -ForegroundColor Green
+    Write-Host "    Stack de Lambda creado" -ForegroundColor Green
 } catch {
     HandleError "Error al desplegar el stack de Lambda: $($_.Exception.Message)"
 }
@@ -134,10 +134,10 @@ try {
         --output json | ConvertFrom-Json
         
     if (-not $Outputs) {
-        Write-Host "   ⚠️  No se pudieron obtener outputs" -ForegroundColor Yellow
+        Write-Host "     No se pudieron obtener outputs" -ForegroundColor Yellow
     }
 } catch {
-    Write-Host "   ⚠️  Error al obtener outputs: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "     Error al obtener outputs: $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
 # --- MOSTRAR RESULTADOS FINALES ---
@@ -150,7 +150,6 @@ if ($Outputs) {
         switch ($output.OutputKey) {
             "ApiUrl" { 
                 Write-Host "`nURL DE LA API: $($output.OutputValue)" -ForegroundColor Yellow
-                Write-Host "   Frontend: frontend/index.html" -ForegroundColor White
                 Write-Host "   Endpoint principal: $($output.OutputValue)/users" -ForegroundColor White
             }
             "LambdaFunctionName" { 
@@ -160,9 +159,13 @@ if ($Outputs) {
     }
 }
 
-Write-Host "`nINSTRUCCIONES RAPIDAS:" -ForegroundColor Green
-Write-Host "   1. Abre frontend/index.html en tu navegador" -ForegroundColor White
-Write-Host "   2. Asegurate de actualizar la URL de la API en el frontend" -ForegroundColor White
-Write-Host "   3. Prueba los endpoints con tu frontend" -ForegroundColor White
-
-Write-Host "`nTu API esta lista para usar!" -ForegroundColor Green
+Write-Host "`nENDPOINTS DISPONIBLES:" -ForegroundColor Green
+Write-Host "   GET    $($output.OutputValue)/users     - Obtener todos los usuarios" -ForegroundColor White
+Write-Host "   GET    $($output.OutputValue)/users/{id} - Obtener usuario por ID" -ForegroundColor White
+Write-Host "   POST   $($output.OutputValue)/users     - Crear nuevo usuario" -ForegroundColor White
+Write-Host "   PUT    $($output.OutputValue)/users/{id} - Actualizar usuario" -ForegroundColor White
+Write-Host "   DELETE $($output.OutputValue)/users/{id} - Eliminar usuario" -ForegroundColor White
+Write-Host "`nPRUEBAS RÁPIDAS:" -ForegroundColor Green
+Write-Host "   Para probar la API:" -ForegroundColor White
+Write-Host "   curl -X GET '$($output.OutputValue)/users'" -ForegroundColor Cyan
+Write-Host "`nTu API REST está lista para usar!" -ForegroundColor Green
