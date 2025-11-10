@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Lambda con API Gateway - Versión Completa'
+Description: '5 Lambdas Especializadas con Express - CORS Completamente Configurado'
 
 Parameters:
   ImageUri:
@@ -25,27 +25,101 @@ Resources:
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
 
-  UsersLambda:
+  # Lambda 1: Listar usuarios (GET /users)
+  ListUsersLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: users-lambda
+      FunctionName: users-list-lambda
       PackageType: Image
       Code:
         ImageUri: !Ref ImageUri
       Role: arn:aws:iam::637423399710:role/LabRole
       MemorySize: 512
-      Timeout: 60
+      Timeout: 30
       Architectures:
         - x86_64
       Environment:
         Variables:
           DB_DYNAMONAME: !Ref DBDynamoName
+          LAMBDA_ROLE: "list"
+
+  # Lambda 2: Crear usuario (POST /users)
+  CreateUserLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: users-create-lambda
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      Role: arn:aws:iam::637423399710:role/LabRole
+      MemorySize: 512
+      Timeout: 30
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DB_DYNAMONAME: !Ref DBDynamoName
+          LAMBDA_ROLE: "create"
+
+  # Lambda 3: Obtener usuario por ID (GET /users/{id})
+  GetUserLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: users-get-lambda
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      Role: arn:aws:iam::637423399710:role/LabRole
+      MemorySize: 512
+      Timeout: 30
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DB_DYNAMONAME: !Ref DBDynamoName
+          LAMBDA_ROLE: "get"
+
+  # Lambda 4: Actualizar usuario (PUT /users/{id})
+  UpdateUserLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: users-update-lambda
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      Role: arn:aws:iam::637423399710:role/LabRole
+      MemorySize: 512
+      Timeout: 30
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DB_DYNAMONAME: !Ref DBDynamoName
+          LAMBDA_ROLE: "update"
+
+  # Lambda 5: Eliminar usuario (DELETE /users/{id}) - también maneja health
+  DeleteUserLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: users-delete-lambda
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      Role: arn:aws:iam::637423399710:role/LabRole
+      MemorySize: 512
+      Timeout: 30
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DB_DYNAMONAME: !Ref DBDynamoName
+          LAMBDA_ROLE: "delete"
 
   RestAPI:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: users-api-decoupled
-      Description: API para gestión de usuarios
+      Name: users-api-5-lambdas
+      Description: API para gestión de usuarios con 5 Lambdas especializadas
       EndpointConfiguration:
         Types: [REGIONAL]
 
@@ -65,14 +139,76 @@ Resources:
       ParentId: !Ref UsersResource
       PathPart: "{id}"
 
-  # Lambda Permission
-  LambdaInvokePermission:
+  # Permisos para las Lambdas
+  ListUsersLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref UsersLambda
+      FunctionName: !Ref ListUsersLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPI}/*/GET/users"
+
+  CreateUserLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CreateUserLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPI}/*/POST/users"
+
+  GetUserLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetUserLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPI}/*/GET/users/*"
+
+  UpdateUserLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UpdateUserLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPI}/*/PUT/users/*"
+
+  DeleteUserLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DeleteUserLambda
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPI}/*/*/*"
+
+  # OPTIONS para el root - CORS Preflight
+  OptionsRootMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPI
+      ResourceId: !GetAtt RestAPI.RootResourceId
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+            ResponseTemplates:
+              application/json: ""
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Credentials: true
 
   # OPTIONS para /users - CORS Preflight
   OptionsUsersMethod:
@@ -88,9 +224,10 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'"
               method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
               method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
             ResponseTemplates:
               application/json: ""
         RequestTemplates:
@@ -101,6 +238,7 @@ Resources:
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Credentials: true
 
   # OPTIONS para /users/{id} - CORS Preflight
   OptionsUserByIdMethod:
@@ -116,9 +254,10 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'"
               method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
               method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
             ResponseTemplates:
               application/json: ""
         RequestTemplates:
@@ -129,9 +268,28 @@ Resources:
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Credentials: true
 
-  # GET /users - Listar usuarios
-  ListUsers:
+  # GET / - Health Check (usando Delete Lambda) - CON CORS
+  RootMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPI
+      ResourceId: !GetAtt RestAPI.RootResourceId
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration: 
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteUserLambda.Arn}/invocations"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # GET /users - Listar usuarios - CON CORS
+  ListUsersMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref RestAPI
@@ -142,10 +300,14 @@ Resources:
       Integration: 
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UsersLambda.Arn}/invocations"
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ListUsersLambda.Arn}/invocations"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
 
-  # POST /users - Crear usuario
-  CreateUser:
+  # POST /users - Crear usuario - CON CORS
+  CreateUserMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref RestAPI
@@ -156,10 +318,14 @@ Resources:
       Integration: 
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UsersLambda.Arn}/invocations"
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUserLambda.Arn}/invocations"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
 
-  # GET /users/{id} - Obtener usuario por ID
-  GetUser:
+  # GET /users/{id} - Obtener usuario por ID - CON CORS
+  GetUserMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref RestAPI
@@ -172,12 +338,14 @@ Resources:
       Integration: 
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UsersLambda.Arn}/invocations"
-        IntegrationResponses:
-          - StatusCode: 200
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetUserLambda.Arn}/invocations"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
 
-  # PUT /users/{id} - Actualizar usuario
-  UpdateUser:
+  # PUT /users/{id} - Actualizar usuario - CON CORS
+  UpdateUserMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref RestAPI
@@ -190,10 +358,14 @@ Resources:
       Integration: 
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UsersLambda.Arn}/invocations"
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateUserLambda.Arn}/invocations"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
 
-  # DELETE /users/{id} - Eliminar usuario
-  DeleteUser:
+  # DELETE /users/{id} - Eliminar usuario - CON CORS
+  DeleteUserMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref RestAPI
@@ -206,22 +378,28 @@ Resources:
       Integration: 
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UsersLambda.Arn}/invocations"
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteUserLambda.Arn}/invocations"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
 
   # Deployment de API Gateway
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
+      - OptionsRootMethod
+      - RootMethod
       - OptionsUsersMethod
       - OptionsUserByIdMethod
-      - ListUsers
-      - CreateUser
-      - GetUser
-      - UpdateUser
-      - DeleteUser
+      - ListUsersMethod
+      - CreateUserMethod
+      - GetUserMethod
+      - UpdateUserMethod
+      - DeleteUserMethod
     Properties:
       RestApiId: !Ref RestAPI
-      Description: "Deployment para API de usuarios"
+      Description: "Deployment para API de usuarios con 5 Lambdas y CORS completo"
 
   # Stage de API Gateway
   ApiStage:
@@ -236,9 +414,14 @@ Outputs:
     Description: "URL base de la API"
     Value: !Sub "https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/prod"
     
-  LambdaFunctionName:
-    Description: "Nombre de la Lambda Function"
-    Value: !Ref UsersLambda
+  LambdaFunctions:
+    Description: "Nombres de las Lambda Functions"
+    Value: !Sub |
+      List: ${ListUsersLambda}
+      Create: ${CreateUserLambda}
+      Get: ${GetUserLambda}
+      Update: ${UpdateUserLambda}
+      Delete: ${DeleteUserLambda}
 
   DynamoDBTable:
     Description: "Nombre de la tabla DynamoDB"
@@ -252,6 +435,7 @@ Outputs:
     Description: "Endpoints disponibles"
     Value: !Sub
       - |
+        GET: ${ApiUrl}/ (Health)
         GET: ${ApiUrl}/users
         POST: ${ApiUrl}/users  
         GET: ${ApiUrl}/users/{id}

@@ -1,0 +1,324 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Usuarios</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .form-group { margin: 10px 0; }
+        input, button { padding: 8px; margin: 5px; }
+        .user-card { border: 1px solid #ddd; padding: 10px; margin: 5px 0; }
+        .search-section { background: #f5f5f5; padding: 15px; margin: 10px 0; }
+        .error { color: red; }
+        .success { color: green; }
+        .user-details { background: #e8f5e8; padding: 10px; margin: 10px 0; }
+        .loading { color: blue; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏠 Gestión de Usuarios</h1>
+        
+        <!-- Buscar usuario por ID -->
+        <div class="search-section">
+            <h2>🔍 Buscar Usuario por ID</h2>
+            <div class="form-group">
+                <input type="number" id="searchId" placeholder="ID del usuario" min="1">
+                <button onclick="buscarUsuarioPorId()">Buscar</button>
+                <button onclick="limpiarBusqueda()">Limpiar</button>
+            </div>
+            <div id="resultadoBusqueda"></div>
+        </div>
+
+        <!-- Formulario para crear usuario -->
+        <div class="form-section">
+            <h2>➕ Crear Usuario</h2>
+            <div class="form-group">
+                <input type="text" id="nombre" placeholder="Nombre" required>
+                <input type="email" id="email" placeholder="Email" required>
+                <button onclick="crearUsuario()">Crear Usuario</button>
+            </div>
+        </div>
+
+        <!-- Lista de usuarios -->
+        <div class="users-section">
+            <h2>👥 Lista de Usuarios</h2>
+            <button onclick="cargarUsuarios()">🔄 Actualizar Lista</button>
+            <div id="usuariosList"></div>
+        </div>
+
+        <div id="mensaje"></div>
+    </div>
+
+    <script>
+        const API_URL = 'https://b47gi15tn0.execute-api.us-east-1.amazonaws.com/prod';
+        
+        // Configuración de headers CORS
+        const corsHeaders = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        };
+
+        // Función para hacer fetch con manejo de CORS
+        async function fetchWithCORS(url, options = {}) {
+            const config = {
+                ...options,
+                headers: {
+                    ...corsHeaders,
+                    ...options.headers
+                },
+                mode: 'cors' // Importante para CORS
+            };
+
+            try {
+                const response = await fetch(url, config);
+                
+                // Verificar si la respuesta fue exitosa
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status}`);
+                }
+                
+                return response;
+            } catch (error) {
+                console.error('Error en fetch:', error);
+                throw error;
+            }
+        }
+
+        // Mostrar mensajes
+        function mostrarMensaje(mensaje, tipo = 'success') {
+            const div = document.getElementById('mensaje');
+            div.innerHTML = `<div class="${tipo}">${mensaje}</div>`;
+            setTimeout(() => div.innerHTML = '', 5000);
+        }
+
+        // Mostrar loading
+        function mostrarLoading(elementId, mensaje = 'Cargando...') {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.innerHTML = `<div class="loading">${mensaje}</div>`;
+            }
+        }
+
+        // Buscar usuario por ID
+        async function buscarUsuarioPorId() {
+            const id = document.getElementById('searchId').value;
+            
+            if (!id) {
+                mostrarMensaje('Por favor ingresa un ID', 'error');
+                return;
+            }
+
+            mostrarLoading('resultadoBusqueda', 'Buscando usuario...');
+
+            try {
+                const response = await fetchWithCORS(`${API_URL}/users/${id}`);
+                
+                if (response.ok) {
+                    const usuario = (await response.json()).data;
+                    const resultadoDiv = document.getElementById('resultadoBusqueda');
+                    resultadoDiv.innerHTML = `
+                        <div class="user-details">
+                            <h3>✅ Usuario Encontrado</h3>
+                            <p><strong>ID:</strong> ${usuario.user_id || usuario.id}</p>
+                            <p><strong>Nombre:</strong> ${usuario.nombre}</p>
+                            <p><strong>Email:</strong> ${usuario.email}</p>
+                            <button onclick="editarUsuario('${usuario.user_id || usuario.id}')">✏️ Editar</button>
+                            <button onclick="eliminarUsuario('${usuario.user_id || usuario.id}')">🗑️ Eliminar</button>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('resultadoBusqueda').innerHTML = `
+                    <div class="error">❌ Error: ${error.message}. Verifica que el usuario exista.</div>
+                `;
+            }
+        }
+
+        // Limpiar búsqueda
+        function limpiarBusqueda() {
+            document.getElementById('searchId').value = '';
+            document.getElementById('resultadoBusqueda').innerHTML = '';
+        }
+
+        // Cargar y mostrar usuarios
+        async function cargarUsuarios() {
+            mostrarLoading('usuariosList', 'Cargando usuarios...');
+
+            try {
+                const response = await fetchWithCORS(`${API_URL}/users`);
+                
+                if (!response.ok) {
+                    throw new Error(`Error al cargar usuarios: ${response.status}`);
+                }
+                
+                const usuarios = (await response.json()).data;
+                
+                // Asegurarse de que usuarios es un array
+                const usuariosArray = Array.isArray(usuarios) ? usuarios : [];
+                
+                const lista = document.getElementById('usuariosList');
+                
+                if (usuariosArray.length === 0) {
+                    lista.innerHTML = '<div class="error">No hay usuarios registrados</div>';
+                    return;
+                }
+
+                lista.innerHTML = usuariosArray.map(usuario => `
+                    <div class="user-card">
+                        <strong>ID ${usuario.user_id || usuario.id}:</strong> ${usuario.nombre} (${usuario.email})
+                        <br>
+                        <button onclick="editarUsuario('${usuario.user_id || usuario.id}')">✏️ Editar</button>
+                        <button onclick="eliminarUsuario('${usuario.user_id || usuario.id}')">🗑️ Eliminar</button>
+                        <button onclick="mostrarDetalleUsuario('${usuario.user_id || usuario.id}')">🔍 Ver Detalles</button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                document.getElementById('usuariosList').innerHTML = `
+                    <div class="error">❌ Error al cargar usuarios: ${error.message}</div>
+                `;
+            }
+        }
+
+        // Mostrar detalle de usuario individual
+        async function mostrarDetalleUsuario(id) {
+            try {
+                document.getElementById('searchId').value = id;
+                await buscarUsuarioPorId();
+            } catch (error) {
+                mostrarMensaje('Error al cargar usuario', 'error');
+            }
+        }
+
+        // Crear usuario
+        async function crearUsuario() {
+            const nombre = document.getElementById('nombre').value.trim();
+            const email = document.getElementById('email').value.trim();
+
+            if (!nombre || !email) {
+                mostrarMensaje('Nombre y email son requeridos', 'error');
+                return;
+            }
+
+            if (!validateEmail(email)) {
+                mostrarMensaje('Por favor ingresa un email válido', 'error');
+                return;
+            }
+
+            try {
+                const userData = { 
+                    nombre, 
+                    email 
+                };
+
+                const response = await fetchWithCORS(`${API_URL}/users`, {
+                    method: 'POST',
+                    body: JSON.stringify(userData)
+                });
+
+                if (response.ok) {
+                    const nuevoUsuario = await response.json();
+                    mostrarMensaje(`Usuario creado exitosamente con ID: ${nuevoUsuario.user_id || nuevoUsuario.id}`);
+                    document.getElementById('nombre').value = '';
+                    document.getElementById('email').value = '';
+                    await cargarUsuarios();
+                    limpiarBusqueda();
+                } else {
+                    const errorData = await response.json();
+                    mostrarMensaje(`Error al crear usuario: ${errorData.message || 'Error desconocido'}`, 'error');
+                }
+            } catch (error) {
+                mostrarMensaje(`Error de conexión: ${error.message}`, 'error');
+            }
+        }
+
+        // Eliminar usuario
+        async function eliminarUsuario(id) {
+            if (!confirm('¿Estás seguro de eliminar este usuario?')) return;
+
+            try {
+                const response = await fetchWithCORS(`${API_URL}/users/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    mostrarMensaje('Usuario eliminado exitosamente');
+                    await cargarUsuarios();
+                    limpiarBusqueda();
+                } else {
+                    mostrarMensaje('Error al eliminar usuario', 'error');
+                }
+            } catch (error) {
+                mostrarMensaje(`Error al eliminar usuario: ${error.message}`, 'error');
+            }
+        }
+
+        // Editar usuario
+        async function editarUsuario(id) {
+            try {
+                // Primero obtener el usuario actual
+                const response = await fetchWithCORS(`${API_URL}/users/${id}`);
+                if (!response.ok) {
+                    mostrarMensaje('Usuario no encontrado', 'error');
+                    return;
+                }
+
+                const usuario = await response.json();
+                
+                const nuevoNombre = prompt('Nuevo nombre:', usuario.nombre);
+                const nuevoEmail = prompt('Nuevo email:', usuario.email);
+
+                if (nuevoNombre !== null && nuevoEmail !== null) {
+                    if (!nuevoNombre.trim() || !nuevoEmail.trim()) {
+                        mostrarMensaje('Nombre y email no pueden estar vacíos', 'error');
+                        return;
+                    }
+
+                    if (!validateEmail(nuevoEmail)) {
+                        mostrarMensaje('Por favor ingresa un email válido', 'error');
+                        return;
+                    }
+
+                    const updateResponse = await fetchWithCORS(`${API_URL}/users/${id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ 
+                            nombre: nuevoNombre.trim(), 
+                            email: nuevoEmail.trim() 
+                        })
+                    });
+
+                    if (updateResponse.ok) {
+                        mostrarMensaje('Usuario actualizado exitosamente');
+                        await cargarUsuarios();
+                        limpiarBusqueda();
+                    } else {
+                        mostrarMensaje('Error al actualizar usuario', 'error');
+                    }
+                }
+            } catch (error) {
+                mostrarMensaje(`Error al actualizar usuario: ${error.message}`, 'error');
+            }
+        }
+
+        // Validar email
+        function validateEmail(email) {
+            const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return re.test(email);
+        }
+
+        // Cargar usuarios al iniciar
+        document.addEventListener('DOMContentLoaded', function() {
+            cargarUsuarios();
+        });
+
+        // Permitir Enter en el campo de búsqueda
+        document.getElementById('searchId').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                buscarUsuarioPorId();
+            }
+        });
+    </script>
+</body>
+</html>

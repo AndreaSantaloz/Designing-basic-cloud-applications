@@ -1,0 +1,233 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Usuarios</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .form-group { margin: 10px 0; }
+        input, button { padding: 8px; margin: 5px; }
+        .user-card { border: 1px solid #ddd; padding: 10px; margin: 5px 0; }
+        .search-section { background: #f5f5f5; padding: 15px; margin: 10px 0; }
+        .error { color: red; }
+        .success { color: green; }
+        .user-details { background: #e8f5e8; padding: 10px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏠 Gestión de Usuarios</h1>
+        
+        <!-- Buscar usuario por ID -->
+        <div class="search-section">
+            <h2>🔍 Buscar Usuario por ID</h2>
+            <div class="form-group">
+                <input type="number" id="searchId" placeholder="ID del usuario" min="1">
+                <button onclick="buscarUsuarioPorId()">Buscar</button>
+                <button onclick="limpiarBusqueda()">Limpiar</button>
+            </div>
+            <div id="resultadoBusqueda"></div>
+        </div>
+
+        <!-- Formulario para crear usuario -->
+        <div class="form-section">
+            <h2>➕ Crear Usuario</h2>
+            <div class="form-group">
+                <input type="text" id="nombre" placeholder="Nombre" required>
+                <input type="email" id="email" placeholder="Email" required>
+                <button onclick="crearUsuario()">Crear Usuario</button>
+            </div>
+        </div>
+
+        <!-- Lista de usuarios -->
+        <div class="users-section">
+            <h2>👥 Lista de Usuarios</h2>
+            <button onclick="cargarUsuarios()">🔄 Actualizar Lista</button>
+            <div id="usuariosList"></div>
+        </div>
+
+        <div id="mensaje"></div>
+    </div>
+
+    <script>
+        const API_URL = 'https://10e2rdgsmf.execute-api.us-east-1.amazonaws.com/prod';
+
+        // Mostrar mensajes
+        function mostrarMensaje(mensaje, tipo = 'success') {
+            const div = document.getElementById('mensaje');
+            div.innerHTML = `<div class="${tipo}">${mensaje}</div>`;
+            setTimeout(() => div.innerHTML = '', 3000);
+        }
+
+        // Buscar usuario por ID
+        async function buscarUsuarioPorId() {
+            const id = document.getElementById('searchId').value;
+            
+            if (!id) {
+                mostrarMensaje('Por favor ingresa un ID', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/users/${id}`);
+                
+                if (response.ok) {
+                    const usuario = (await response.json()).data;
+                    const resultadoDiv = document.getElementById('resultadoBusqueda');
+                    resultadoDiv.innerHTML = `
+                        <div class="user-details">
+                            <h3>✅ Usuario Encontrado</h3>
+                            <p><strong>ID:</strong> ${usuario.user_id}</p>
+                            <p><strong>Nombre:</strong> ${usuario.nombre}</p>
+                            <p><strong>Email:</strong> ${usuario.email}</p>
+                            <button onclick="editarUsuario(${usuario.user_id})">✏️ Editar</button>
+                            <button onclick="eliminarUsuario(${usuario.user_id})">🗑️ Eliminar</button>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('resultadoBusqueda').innerHTML = `
+                        <div class="error">❌ Usuario no encontrado</div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('resultadoBusqueda').innerHTML = `
+                    <div class="error">❌ Error de conexión</div>
+                `;
+            }
+        }
+
+        // Limpiar búsqueda
+        function limpiarBusqueda() {
+            document.getElementById('searchId').value = '';
+            document.getElementById('resultadoBusqueda').innerHTML = '';
+        }
+
+        // Cargar y mostrar usuarios
+        async function cargarUsuarios() {
+            try {
+                const response = await fetch(`${API_URL}/users`);
+             
+                const usuarios = (await response.json()).data;
+                console.log(usuarios);
+                const lista = document.getElementById('usuariosList');
+                lista.innerHTML = usuarios.map(usuario => `
+                    <div class="user-card">
+                        <strong>ID ${usuario.user_id}:</strong> ${usuario.nombre} (${usuario.email})
+                        <br>
+                        <button onclick="editarUsuario(${usuario.user_id})">✏️ Editar</button>
+                        <button onclick="eliminarUsuario(${usuario.user_id})">🗑️ Eliminar</button>
+                        <button onclick="mostrarDetalleUsuario(${usuario.user_id})">🔍 Ver Detalles</button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                mostrarMensaje('Error al cargar usuarios', 'error');
+            }
+        }
+
+        // Mostrar detalle de usuario individual
+        async function mostrarDetalleUsuario(id) {
+            try {
+                const response = await fetch(`${API_URL}/users/${id}`);
+                if (response.ok) {
+                    const usuario = await response.json();
+                    document.getElementById('searchId').value = usuario.id;
+                    buscarUsuarioPorId(); // Reutilizar la función de búsqueda
+                }
+            } catch (error) {
+                mostrarMensaje('Error al cargar usuario', 'error');
+            }
+        }
+
+        // Crear usuario
+        async function crearUsuario() {
+            const nombre = document.getElementById('nombre').value;
+            const email = document.getElementById('email').value;
+
+            if (!nombre || !email) {
+                mostrarMensaje('Nombre y email son requeridos', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/users`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre, email })
+                });
+
+                if (response.ok) {
+                    mostrarMensaje('Usuario creado exitosamente');
+                    document.getElementById('nombre').value = '';
+                    document.getElementById('email').value = '';
+                    cargarUsuarios();
+                    limpiarBusqueda();
+                } else {
+                    mostrarMensaje('Error al crear usuario', 'error');
+                }
+            } catch (error) {
+                mostrarMensaje('Error de conexión', 'error');
+            }
+        }
+
+        // Eliminar usuario
+        async function eliminarUsuario(id) {
+            if (!confirm('¿Estás seguro de eliminar este usuario?')) return;
+
+            try {
+                const response = await fetch(`${API_URL}/users/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    mostrarMensaje('Usuario eliminado');
+                    cargarUsuarios();
+                    limpiarBusqueda();
+                }
+            } catch (error) {
+                mostrarMensaje('Error al eliminar usuario', 'error');
+            }
+        }
+
+        // Editar usuario
+        async function editarUsuario(id) {
+            try {
+                // Primero obtener el usuario actual
+                const response = await fetch(`${API_URL}/users/${id}`);
+                if (!response.ok) {
+                    mostrarMensaje('Usuario no encontrado', 'error');
+                    return;
+                }
+
+                const usuario = await response.json();
+                
+                const nuevoNombre = prompt('Nuevo nombre:', usuario.nombre);
+                const nuevoEmail = prompt('Nuevo email:', usuario.email);
+
+                if (nuevoNombre && nuevoEmail) {
+                    const updateResponse = await fetch(`${API_URL}/users/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            nombre: nuevoNombre, 
+                            email: nuevoEmail 
+                        })
+                    });
+
+                    if (updateResponse.ok) {
+                        mostrarMensaje('Usuario actualizado');
+                        cargarUsuarios();
+                        limpiarBusqueda();
+                    }
+                }
+            } catch (error) {
+                mostrarMensaje('Error al actualizar usuario', 'error');
+            }
+        }
+
+        // Cargar usuarios al iniciar
+        cargarUsuarios();
+    </script>
+</body>
+</html>

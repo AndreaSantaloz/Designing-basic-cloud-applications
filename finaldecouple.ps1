@@ -14,6 +14,10 @@ $LambdaDockerfilePath = "./Decoupled/Dockerfile"
 $CoupledDockerfilePath = "./Coupled/Dockerfile"
 $TargetPlatform = "linux/amd64"
 
+# Variables para tracking de éxito
+$LambdaSuccess = $false
+$CoupledSuccess = $false
+
 Write-Host "=== INICIANDO DESPLIEGUE COMPLETO ===" -ForegroundColor Green
 Write-Host "ECR SEPARADOS + Lambda (Desacoplada) + ECS+NLB (Acoplada)" -ForegroundColor Cyan
 Write-Host "Usando estructuras de carpetas separadas" -ForegroundColor Yellow
@@ -362,8 +366,6 @@ try {
 
 # --- Paso 6B: Desplegar version ACOPLADA (ECS + NLB + VPC Link) ---
 Write-Host "`n6B. DESPLEGANDO VERSION ACOPLADA (ECS + NLB + VPC Link)..." -ForegroundColor Yellow
-
-    
 try {
     Write-Host "   Creando stack acoplado (esto puede tomar 15-20 minutos)..." -ForegroundColor Yellow
     Write-Host "   Incluyendo: VPC, ECS, NLB, VPC Link, API Gateway" -ForegroundColor Cyan
@@ -443,66 +445,17 @@ if ($CoupledSuccess) {
     }
 }
 
-$LambdaApiUrl = (aws cloudformation describe-stacks --stack-name $LambdaStackName --region $Region --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' --output text 2>$null)
-if ([string]::IsNullOrEmpty($LambdaApiUrl)) { $LambdaApiUrl = "http://ERROR-LAMBDA-URL" }
-Write-Host "   API Lambda URL: $LambdaApiUrl" -ForegroundColor Cyan
-
-# Obtener URI ECR Acoplada
-$CoupledApiUrl = (aws cloudformation describe-stacks --stack-name $CoupledStackName --region $Region --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' --output text 2>$null)
-if ([string]::IsNullOrEmpty($CoupledApiUrl)) { $CoupledApiUrl = "http://ERROR-COUPLED-URL" }
-Write-Host "  API Acoplada URL: $CoupledApiUrl" -ForegroundColor Cyan
-
-# --- Paso 8: Generación de Archivos de Prueba y Lanzamiento Dual ---
-Write-Host "`n8. GENERANDO ARCHIVOS Y LANZANDO PRUEBA DUAL..." -ForegroundColor Yellow
-
-# --- Función para generar archivos de prueba específicos para cada API ---
-function Generate-TestFiles {
-    param(
-        [string]$LambdaUrl,
-        [string]$CoupledUrl
-    )
-    
-    $BaseHtmlPath = ".\index.html" # Nombre de tu archivo HTML base
-    
-    if (-not (Test-Path $BaseHtmlPath)) {
-        HandleError "No se encontró el archivo HTML base: $BaseHtmlPath"
-    }
-    
-    $BaseContent = Get-Content $BaseHtmlPath -Raw
-    
-    # 1. Generar archivo para Lambda
-    $LambdaContent = $BaseContent -replace "const API_URL = 'http://localhost:3000';", "const API_URL = '$LambdaUrl';"
-    $LambdaContent = $LambdaContent -replace "Gestión de Usuarios", "Gestión de Usuarios (SERVERLESS - LAMBDA)"
-    $LambdaFilePath = ".\lambda-test.html"
-    $LambdaContent | Out-File $LambdaFilePath -Encoding UTF8
-    Write-Host "   ✅ Archivo de prueba Lambda generado: $LambdaFilePath" -ForegroundColor Green
-
-    # 2. Generar archivo para ECS/Coupled
-    $CoupledContent = $BaseContent -replace "const API_URL = 'http://localhost:3000';", "const API_URL = '$CoupledUrl';"
-    $CoupledContent = $CoupledContent -replace "Gestión de Usuarios", "Gestión de Usuarios (ACOPLADA - ECS)"
-    $CoupledFilePath = ".\coupled-test.html"
-    $CoupledContent | Out-File $CoupledFilePath -Encoding UTF8
-    Write-Host "   ✅ Archivo de prueba Acoplada generado: $CoupledFilePath" -ForegroundColor Green
-
-    return @{
-        LambdaFile = $LambdaFilePath;
-        CoupledFile = $CoupledFilePath
-    }
+# Obtener URLs de fallback si es necesario
+if ([string]::IsNullOrEmpty($LambdaApiUrl)) { 
+    $LambdaApiUrl = (aws cloudformation describe-stacks --stack-name $LambdaStackName --region $Region --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' --output text 2>$null)
+    if ([string]::IsNullOrEmpty($LambdaApiUrl)) { $LambdaApiUrl = "http://ERROR-LAMBDA-URL" }
 }
 
-# Generar los dos archivos de prueba (lambda-test.html y coupled-test.html)
-$TestFiles = Generate-TestFiles -LambdaUrl $LambdaApiUrl -CoupledUrl $CoupledApiUrl
-
-# Lanzar la prueba Serverless (Lambda)
-if (Test-Path $TestFiles.LambdaFile) {
-    Write-Host " 🌐 Abriendo Frontend Serverless..." -ForegroundColor Green
-    Start-Process $TestFiles.LambdaFile
+if ([string]::IsNullOrEmpty($CoupledApiUrl)) { 
+    $CoupledApiUrl = (aws cloudformation describe-stacks --stack-name $CoupledStackName --region $Region --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' --output text 2>$null)
+    if ([string]::IsNullOrEmpty($CoupledApiUrl)) { $CoupledApiUrl = "http://ERROR-COUPLED-URL" }
 }
 
-# Lanzar la prueba Acoplada (ECS)
-if (Test-Path $TestFiles.CoupledFile) {
-    Write-Host "  🌐 Abriendo Frontend Acoplado..." -ForegroundColor Green
-    Start-Process $TestFiles.CoupledFile
-}
+Write-Host "   API Lambda URL: $LambdaApiUrl" -ForegroundColor Cyan
+Write-Host "   API Acoplada URL: $CoupledApiUrl" -ForegroundColor Cyan
 
-Write-Host "`n=== DESPLIEGUE Y LANZAMIENTO DUAL COMPLETADO ===" -ForegroundColor Yellow
