@@ -130,3 +130,9 @@ Buena — te doy un **análisis numérico y práctico** (con supuestos claros) p
 
 
  Explicación rápida: para tráfico **bajo/esporádico** Lambda suele ser mucho más barato porque pagas por invocación (+ API GW), mientras que Fargate/ECS incurre en coste fijo 24/7 (tareas + NLB). A medida que sube el tráfico sostenido, la diferencia se reduce; en algunos niveles el container puede volverse competitivo si necesitas baja latencia y conexiones persistentes. (Cálculos y fórmulas basadas en los precios oficiales citados arriba). 
+<img width="1144" height="1414" alt="aws (1)" src="https://github.com/user-attachments/assets/c4534b16-fc8b-43e6-8c8e-78bdb8bc4c87" />
+
+<img width="1144" height="1414" alt="undefined" src="https://github.com/user-attachments/assets/d0d9a279-a294-4116-9bef-93b374ad389c" />
+
+
+
