@@ -1,0 +1,372 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECS con NLB y VPC Link - Versión Acoplada'
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: "URI de la imagen Docker en ECR"
+
+  ImageName:
+    Type: String
+    Description: "Nombre de la imagen ECR"
+
+  VpcId:
+    Type: String
+    Description: "ID de la VPC"
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: At least 2 Subnets
+    Default: "subnet-0993f0b9d12b7b4af,subnet-0dfbc3030ac171274"
+
+  DBType:
+    Type: String
+    Description: "Tipo de base de datos"
+  DBHost:
+    Type: String
+    Description: "Host de la base de datos"
+  DBName:
+    Type: String
+    Description: "Nombre de la base de datos"
+  DBUser:
+    Type: String
+    Description: "Usuario de la base de datos"
+  DBPass:
+    Type: String
+    Description: "Contraseña de la base de datos"
+  DBDynamoName:
+    Type: String
+    Description: "Nombre de la tabla DynamoDB"
+    Default: "users"
+
+Resources:
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref DBDynamoName
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ECS tasks
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+
+  NLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: users-nlb
+      Type: network
+      Scheme: internal
+      Subnets: !Ref SubnetIds
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: users-tg
+      Port: 8080
+      Protocol: TCP
+      VpcId: !Ref VpcId
+      TargetType: ip
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /health
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref NLB
+      Port: 8080
+      Protocol: TCP
+
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: users-cluster
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: users-task
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 256
+      Memory: 512
+      ExecutionRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
+      TaskRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
+      ContainerDefinitions:
+        - Name: users-container
+          Image: !Ref ImageUri  
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/users
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: users
+              awslogs-create-group: "true"
+          Environment:
+            - Name: DB_TYPE
+              Value: !Ref DBType
+            - Name: DB_HOST
+              Value: !Ref DBHost
+            - Name: DB_NAME
+              Value: !Ref DBName
+            - Name: DB_USER
+              Value: !Ref DBUser
+            - Name: DB_PASS
+              Value: !Ref DBPass
+            - Name: DB_DYNAMONAME
+              Value: !Ref DBDynamoName
+
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - Listener
+    Properties:
+      Cluster: !Ref ECSCluster
+      ServiceName: users-service
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: !Ref SubnetIds
+          SecurityGroups:
+            - !Ref ECSSecurityGroup
+      LoadBalancers:
+        - ContainerName: users-container
+          ContainerPort: 8080
+          TargetGroupArn: !Ref TargetGroup
+
+  VPCLink:
+    Type: AWS::ApiGateway::VpcLink
+    Properties:
+      Name: users-vpc-link
+      TargetArns:
+        - !Ref NLB
+
+  RestAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: users-api-coupled
+      Description: API para gestión de usuarios
+      EndpointConfiguration:
+        Types: [REGIONAL]
+
+  UsersResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestAPI
+      ParentId: !GetAtt RestAPI.RootResourceId
+      PathPart: users
+
+  UserByIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestAPI
+      ParentId: !Ref UsersResource
+      PathPart: "{id}"
+  
+  PostUsersMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPI
+      ResourceId: !Ref UsersResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "http://${NLB.DNSName}:8080/users"
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref VPCLink
+
+  GetUsersMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPI
+      ResourceId: !Ref UsersResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: GET
+        Uri: !Sub "http://${NLB.DNSName}:8080/users"
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref VPCLink
+
+  GetUserMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPI
+      ResourceId: !Ref UserByIdResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      RequestParameters:
+        method.request.path.id: false
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: GET
+        Uri: !Sub "http://${NLB.DNSName}:8080/users/{id}"
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref VPCLink
+        RequestParameters:
+          integration.request.path.id: method.request.path.id
+
+  PutUserMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPI
+      ResourceId: !Ref UserByIdResource
+      HttpMethod: PUT
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      RequestParameters:
+        method.request.path.id: false
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: PUT
+        Uri: !Sub "http://${NLB.DNSName}:8080/users/{id}"
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref VPCLink
+        RequestParameters:
+          integration.request.path.id: method.request.path.id
+
+  DeleteUserMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPI
+      ResourceId: !Ref UserByIdResource
+      HttpMethod: DELETE
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      RequestParameters:
+        method.request.path.id: false
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: DELETE
+        Uri: !Sub "http://${NLB.DNSName}:8080/users/{id}"
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref VPCLink
+        RequestParameters:
+          integration.request.path.id: method.request.path.id
+
+  OptionsUsersMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPI
+      ResourceId: !Ref UsersResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,x-api-key'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ""
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  OptionsUserByIdMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestAPI
+      ResourceId: !Ref UserByIdResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,x-api-key'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ""
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - OptionsUsersMethod
+      - OptionsUserByIdMethod
+      - GetUsersMethod      
+      - PostUsersMethod    
+      - GetUserMethod       
+      - PutUserMethod       
+      - DeleteUserMethod    
+    Properties:
+      RestApiId: !Ref RestAPI
+      Description: "Deployment para API de usuarios"
+
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref RestAPI
+      DeploymentId: !Ref ApiDeployment
+      StageName: prod
+
+Outputs:
+  ApiUrl:
+    Description: "URL base de la API"
+    Value: !Sub "https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/prod"
+
+  DynamoDBTable:
+    Description: "Nombre de la tabla DynamoDB"
+    Value: !Ref UsersTable
+
+  DynamoDBArn:
+    Description: "ARN de la tabla DynamoDB"
+    Value: !GetAtt UsersTable.Arn
+
+  ApiEndpoints:
+    Description: "Endpoints disponibles"
+    Value: !Sub
+      - |
+        GET: ${ApiUrl}/users
+        POST: ${ApiUrl}/users  
+        GET: ${ApiUrl}/users/{id}
+        PUT: ${ApiUrl}/users/{id}
+        DELETE: ${ApiUrl}/users/{id}
+      - ApiUrl: !Sub "https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/prod"
